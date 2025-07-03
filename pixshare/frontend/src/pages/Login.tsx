@@ -1,20 +1,36 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useState } from "react";
+import { BASE_URL } from "../utils/api"; // Ensure this exists and points to your backend
 
 export default function Login() {
-  const [formData, setFormData] = useState({
-    email: "",
-    password: "",
-  });
+  const [formData, setFormData] = useState({ email: "", password: "" });
+  const [error, setError] = useState("");
+  const navigate = useNavigate();
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) =>
     setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault(); // Prevent page reload
-    console.log("Login form submitted:", formData);
-    // TODO: send login request to backend
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+
+    try {
+      const res = await fetch(`${BASE_URL}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) throw new Error(data.msg || "Login failed");
+
+      localStorage.setItem("token", data.token);
+      alert("✅ Login successful!");
+      navigate("/dashboard");
+    } catch (err: any) {
+      setError(err.message || "Something went wrong");
+    }
   };
 
   return (
@@ -42,12 +58,16 @@ export default function Login() {
           required
           className="w-full px-4 py-2 border rounded focus:outline-none focus:ring focus:ring-[var(--primary)]"
         />
+
+        {error && <p className="text-red-600 text-sm">{error}</p>}
+
         <button
           type="submit"
           className="w-full bg-[var(--accent)] hover:bg-[var(--accent-dark)] text-white font-semibold py-2 px-4 rounded"
         >
           Log In
         </button>
+
         <p className="text-sm text-center">
           Don’t have an account?{" "}
           <Link to="/register" className="text-[var(--primary)] hover:underline">

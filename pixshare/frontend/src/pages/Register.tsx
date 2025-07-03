@@ -1,60 +1,114 @@
-import { Link } from "react-router-dom";
 import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 
-export default function Login() {
+const Register = () => {
   const [formData, setFormData] = useState({
+    name: "",
     email: "",
     password: "",
   });
+
+  const [error, setError] = useState("");
+  const navigate = useNavigate();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault(); // Prevent page reload
-    console.log("Login form submitted:", formData);
-    // TODO: send login request to backend
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch("http://localhost:5000/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || "Registration failed");
+      }
+
+      setError("");
+      navigate("/login"); // redirect to login after success
+    } catch (err: any) {
+      setError(err.message || "Something went wrong");
+    }
   };
 
   return (
-    <main className="flex flex-col items-center justify-center min-h-[80vh] p-6">
-      <h1 className="text-3xl font-bold mb-4 text-[var(--primary)]">Log In</h1>
+    <div className="flex items-center justify-center min-h-screen bg-[var(--bg-light)] text-[var(--primary)]">
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-sm space-y-4 bg-white p-6 rounded shadow"
+        className="w-full max-w-md space-y-4 bg-white p-6 rounded shadow"
       >
-        <input
-          type="email"
-          name="email"
-          placeholder="Email"
-          value={formData.email}
-          onChange={handleChange}
-          required
-          className="w-full px-4 py-2 border rounded focus:outline-none focus:ring focus:ring-[var(--primary)]"
-        />
-        <input
-          type="password"
-          name="password"
-          placeholder="Password"
-          value={formData.password}
-          onChange={handleChange}
-          required
-          className="w-full px-4 py-2 border rounded focus:outline-none focus:ring focus:ring-[var(--primary)]"
-        />
+        <h1 className="text-2xl font-bold text-center text-[var(--accent-dark)]">
+          Register
+        </h1>
+
+        <div className="flex flex-col space-y-1">
+          <label htmlFor="name" className="text-sm font-medium">
+            Full Name
+          </label>
+          <input
+            id="name"
+            name="name"
+            type="text"
+            value={formData.name}
+            onChange={handleChange}
+            required
+            className="px-3 py-2 border border-gray-300 rounded shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+          />
+        </div>
+
+        <div className="flex flex-col space-y-1">
+          <label htmlFor="email" className="text-sm font-medium">
+            Email
+          </label>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            value={formData.email}
+            onChange={handleChange}
+            required
+            className="px-3 py-2 border border-gray-300 rounded shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+          />
+        </div>
+
+        <div className="flex flex-col space-y-1">
+          <label htmlFor="password" className="text-sm font-medium">
+            Password
+          </label>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            value={formData.password}
+            onChange={handleChange}
+            required
+            className="px-3 py-2 border border-gray-300 rounded shadow-sm focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+          />
+        </div>
+
+        {error && <p className="text-sm text-red-600">{error}</p>}
+
         <button
           type="submit"
           className="w-full bg-[var(--accent)] hover:bg-[var(--accent-dark)] text-white font-semibold py-2 px-4 rounded"
         >
-          Log In
+          Register
         </button>
-        <p className="text-sm text-center">
-          Don’t have an account?{" "}
-          <Link to="/register" className="text-[var(--primary)] hover:underline">
-            Register
+
+        <p className="text-sm text-center mt-2">
+          Already have an account?{" "}
+          <Link to="/login" className="text-[var(--primary)] hover:underline">
+            Log in
           </Link>
         </p>
       </form>
-    </main>
+    </div>
   );
-}
+};
+
+export default Register;
