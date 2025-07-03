@@ -101,9 +101,9 @@ const Register = () => {
         </button>
 
         <p className="text-sm text-center mt-2">
-          Already have an account?{" "}
+          {" "}
           <Link to="/login" className="text-[var(--primary)] hover:underline">
-            Log in
+            Already have an account? Log in
           </Link>
         </p>
       </form>

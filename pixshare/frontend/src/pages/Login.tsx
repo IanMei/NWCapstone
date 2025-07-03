@@ -69,9 +69,9 @@ export default function Login() {
         </button>
 
         <p className="text-sm text-center">
-          Don’t have an account?{" "}
+          {" "}
           <Link to="/register" className="text-[var(--primary)] hover:underline">
-            Register
+            Don’t have an account? Register
           </Link>
         </p>
       </form>
