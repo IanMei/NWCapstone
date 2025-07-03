@@ -1,0 +1,60 @@
+import { Link } from "react-router-dom";
+import { useState } from "react";
+
+export default function Login() {
+  const [formData, setFormData] = useState({
+    email: "",
+    password: "",
+  });
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault(); // Prevent page reload
+    console.log("Login form submitted:", formData);
+    // TODO: send login request to backend
+  };
+
+  return (
+    <main className="flex flex-col items-center justify-center min-h-[80vh] p-6">
+      <h1 className="text-3xl font-bold mb-4 text-[var(--primary)]">Log In</h1>
+      <form
+        onSubmit={handleSubmit}
+        className="w-full max-w-sm space-y-4 bg-white p-6 rounded shadow"
+      >
+        <input
+          type="email"
+          name="email"
+          placeholder="Email"
+          value={formData.email}
+          onChange={handleChange}
+          required
+          className="w-full px-4 py-2 border rounded focus:outline-none focus:ring focus:ring-[var(--primary)]"
+        />
+        <input
+          type="password"
+          name="password"
+          placeholder="Password"
+          value={formData.password}
+          onChange={handleChange}
+          required
+          className="w-full px-4 py-2 border rounded focus:outline-none focus:ring focus:ring-[var(--primary)]"
+        />
+        <button
+          type="submit"
+          className="w-full bg-[var(--accent)] hover:bg-[var(--accent-dark)] text-white font-semibold py-2 px-4 rounded"
+        >
+          Log In
+        </button>
+        <p className="text-sm text-center">
+          Don’t have an account?{" "}
+          <Link to="/register" className="text-[var(--primary)] hover:underline">
+            Register
+          </Link>
+        </p>
+      </form>
+    </main>
+  );
+}

@@ -1,0 +1,20 @@
+/* @tailwind base;
+@tailwind components;
+@tailwind utilities; */
+
+@import "tailwindcss";
+
+/* Custom Theme Variables */
+:root {
+  --primary: #729fd8;
+  --secondary: #89b3d9;
+  --accent: #f2a517;
+  --accent-dark: #d8851d;
+  --bg-light: #dabca4;
+}
+
+body {
+  background-color: var(--bg-light);
+  color: var(--primary);
+  font-family: sans-serif;
+}
