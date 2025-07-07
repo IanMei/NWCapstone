@@ -9,7 +9,7 @@ export default function Home() {
         Designed for simplicity, privacy, and future flexibility.
       </p>
       <Link
-        to="/register"
+        to="/login"
         className="bg-[var(--accent)] hover:bg-[var(--accent-dark)] text-white px-6 py-3 rounded shadow font-semibold"
       >
         Get Started
