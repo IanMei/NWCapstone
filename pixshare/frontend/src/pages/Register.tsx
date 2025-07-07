@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { BASE_URL } from "../utils/api";
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -18,7 +19,7 @@ const Register = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch("http://localhost:5000/api/auth/register", {
+      const res = await fetch(`${BASE_URL}/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
@@ -26,7 +27,7 @@ const Register = () => {
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.message || "Registration failed");
+        throw new Error(data.message || data.msg || "Registration failed");
       }
 
       setError("");

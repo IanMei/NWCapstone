@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-
-const BASE_URL = "http://localhost:5000/api"; // Update this if needed
+import { BASE_URL } from "../utils/api";
+// const BASE_URL = "http://localhost:5000/api"; // Update this if needed
 
 export default function Login() {
   const [formData, setFormData] = useState({ email: "", password: "" });
@@ -29,7 +29,7 @@ export default function Login() {
       if (!res.ok) throw new Error(data.msg || "Login failed");
 
       localStorage.setItem("token", data.token);
-      login(); // ✅ update global login state
+      login(data.token); // ✅ update global login state
       navigate("/dashboard");
     } catch (err: any) {
       setError(err.message || "Network error");

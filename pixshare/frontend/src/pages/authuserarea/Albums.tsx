@@ -1,69 +1,102 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { BASE_URL } from "../../utils/api";
 
 type Album = {
   id: number;
-  name: string;
+  title: string;
 };
 
 export default function Albums() {
   const [albums, setAlbums] = useState<Album[]>([]);
   const [newAlbumName, setNewAlbumName] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
 
   const token = localStorage.getItem("token");
+  const navigate = useNavigate();
 
+  const authHeaders = token
+    ? { Authorization: `Bearer ${token}` }
+    : {};
+
+  // Fetch albums
   const fetchAlbums = async () => {
+    setLoading(true);
     try {
       const res = await fetch(`${BASE_URL}/albums`, {
+        method: "GET",
         headers: {
-          Authorization: `Bearer ${token}`,
+          ...authHeaders,
         },
       });
+
+      if (res.status === 401) {
+        console.warn("Unauthorized, redirecting to login.");
+        navigate("/login");
+        return;
+      }
+
       const data = await res.json();
-      setAlbums(data.albums);
-    } catch (err) {
-      console.error("Failed to fetch albums:", err);
+      console.log("Albums fetched:", data);
+
+      if (!res.ok) throw new Error(data.msg || "Failed to fetch albums");
+      setAlbums(data.albums || []);
+    } catch (err: any) {
+      console.error("Fetch error:", err);
+      setError(err.message || "Error fetching albums");
+    } finally {
+      setLoading(false);
     }
   };
 
   const createAlbum = async () => {
     if (!newAlbumName.trim()) return;
+
     try {
       const res = await fetch(`${BASE_URL}/albums`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          ...authHeaders,
         },
-        body: JSON.stringify({ name: newAlbumName }),
+        body: JSON.stringify({ title: newAlbumName }), // ✅ use 'title'
       });
+
       const data = await res.json();
-      if (res.ok) {
-        setAlbums((prev) => [...prev, data.album]);
-        setNewAlbumName("");
-      }
-    } catch (err) {
-      console.error("Failed to create album:", err);
+      if (!res.ok) throw new Error(data.msg || "Failed to create album");
+
+      setAlbums((prev) => [...prev, data.album]);
+      setNewAlbumName("");
+    } catch (err: any) {
+      console.error("Create album error:", err);
+      setError(err.message || "Error creating album");
     }
   };
 
   const deleteAlbum = async (id: number) => {
     try {
-      await fetch(`${BASE_URL}/albums/${id}`, {
+      const res = await fetch(`${BASE_URL}/albums/${id}`, {
         method: "DELETE",
         headers: {
-          Authorization: `Bearer ${token}`,
+          ...authHeaders,
         },
       });
+
+      if (!res.ok) throw new Error("Failed to delete album");
       setAlbums((prev) => prev.filter((a) => a.id !== id));
-    } catch (err) {
-      console.error("Failed to delete album:", err);
+    } catch (err: any) {
+      console.error("Delete album error:", err);
+      setError(err.message || "Error deleting album");
     }
   };
 
   useEffect(() => {
-    fetchAlbums();
+    if (!token) {
+      navigate("/login");
+    } else {
+      fetchAlbums();
+    }
   }, []);
 
   return (
@@ -85,24 +118,35 @@ export default function Albums() {
         </button>
       </div>
 
-      <ul className="space-y-4">
-        {albums.map((album) => (
-          <li
-            key={album.id}
-            className="flex justify-between items-center p-4 bg-white rounded shadow"
-          >
-            <Link to={`/albums/${album.id}`} className="text-lg text-[var(--secondary)] hover:underline">
-              {album.name}
-            </Link>
-            <button
-              onClick={() => deleteAlbum(album.id)}
-              className="text-sm text-red-600 hover:underline"
+      {loading ? (
+        <p>Loading albums...</p>
+      ) : error ? (
+        <p className="text-red-600">{error}</p>
+      ) : albums.length === 0 ? (
+        <p>No albums yet. Create one above.</p>
+      ) : (
+        <ul className="space-y-4">
+          {albums.map((album) => (
+            <li
+              key={album.id}
+              className="flex justify-between items-center p-4 bg-white rounded shadow"
             >
-              Delete
-            </button>
-          </li>
-        ))}
-      </ul>
+              <Link
+                to={`/albums/${album.id}`}
+                className="text-lg text-[var(--secondary)] hover:underline"
+              >
+                {album.title}
+              </Link>
+              <button
+                onClick={() => deleteAlbum(album.id)}
+                className="text-sm text-red-600 hover:underline"
+              >
+                Delete
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </main>
   );
 }
