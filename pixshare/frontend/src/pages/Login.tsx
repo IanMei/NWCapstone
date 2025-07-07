@@ -1,14 +1,18 @@
-import { Link, useNavigate } from "react-router-dom";
 import { useState } from "react";
-import { BASE_URL } from "../utils/api"; // Ensure this exists and points to your backend
+import { useNavigate, Link } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+
+const BASE_URL = "http://localhost:5000/api"; // Update this if needed
 
 export default function Login() {
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
   const navigate = useNavigate();
+  const { login } = useAuth();
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) =>
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,19 +26,18 @@ export default function Login() {
       });
 
       const data = await res.json();
-
       if (!res.ok) throw new Error(data.msg || "Login failed");
 
       localStorage.setItem("token", data.token);
-      alert("✅ Login successful!");
+      login(); // ✅ update global login state
       navigate("/dashboard");
     } catch (err: any) {
-      setError(err.message || "Something went wrong");
+      setError(err.message || "Network error");
     }
   };
 
   return (
-    <main className="flex flex-col items-center justify-center min-h-[80vh] p-6">
+    <main className="flex flex-col items-center justify-center min-h-[80vh] p-6 bg-[var(--bg-light)]">
       <h1 className="text-3xl font-bold mb-4 text-[var(--primary)]">Log In</h1>
       <form
         onSubmit={handleSubmit}
@@ -58,20 +61,17 @@ export default function Login() {
           required
           className="w-full px-4 py-2 border rounded focus:outline-none focus:ring focus:ring-[var(--primary)]"
         />
-
         {error && <p className="text-red-600 text-sm">{error}</p>}
-
         <button
           type="submit"
           className="w-full bg-[var(--accent)] hover:bg-[var(--accent-dark)] text-white font-semibold py-2 px-4 rounded"
         >
           Log In
         </button>
-
         <p className="text-sm text-center">
-          {" "}
+          Don’t have an account?{" "}
           <Link to="/register" className="text-[var(--primary)] hover:underline">
-            Don’t have an account? Register
+            Register
           </Link>
         </p>
       </form>
