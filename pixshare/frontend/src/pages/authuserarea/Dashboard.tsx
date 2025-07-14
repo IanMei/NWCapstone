@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 
 export default function Dashboard() {
   // Placeholder values for storage and albums
-  const storageUsed = 2.5; // in GB
+  const storageUsed = 0.1; // in GB
   const storageLimit = 10; // in GB
   const recentAlbums = [
     { id: "1", name: "Summer Vacation" },
