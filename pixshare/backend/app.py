@@ -11,7 +11,7 @@ from routes.photos import photos_bp
 from models import *
 
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": "http://localhost:5173"}}, supports_credentials=True)
+CORS(app)
 app.config.from_object(Config)
 
 UPLOAD_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../uploads"))
