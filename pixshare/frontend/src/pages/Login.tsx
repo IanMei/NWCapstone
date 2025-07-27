@@ -1,14 +1,22 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
-const BASE_URL = "http://localhost:5000/api"; // Update this if needed
+const BASE_URL = "http://localhost:5000/api";
 
 export default function Login() {
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
   const navigate = useNavigate();
   const { login } = useAuth();
+
+  // 🧹 Clear any bad token on initial load
+  useEffect(() => {
+    const current = localStorage.getItem("token");
+    if (!current || current === "undefined") {
+      localStorage.removeItem("token");
+    }
+  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -26,12 +34,22 @@ export default function Login() {
       });
 
       const data = await res.json();
+      console.log("Login response data:", data);
+
       if (!res.ok) throw new Error(data.msg || "Login failed");
 
-      localStorage.setItem("token", data.token);
-      login(); // ✅ update global login state
-      navigate("/dashboard");
+      const token = data.token;
+      if (typeof token === "string" && token !== "undefined" && token.length > 0) {
+        localStorage.setItem("token", token);
+        console.log("Token stored:", token);
+        // await new Promise((resolve) => setTimeout(resolve, 10));
+        login(); // Context update
+        navigate("/dashboard");
+      } else {
+        throw new Error("Invalid token received from server");
+      }
     } catch (err: any) {
+      console.error("Login error:", err);
       setError(err.message || "Network error");
     }
   };

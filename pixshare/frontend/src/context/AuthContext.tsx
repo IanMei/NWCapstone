@@ -9,13 +9,20 @@ type AuthContextType = {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState(
-    !!localStorage.getItem("token")
-  );
+  const getValidToken = () => {
+    const token = localStorage.getItem("token");
+    return token && token !== "undefined";
+  };
+
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(getValidToken());
 
   const login = (token: string) => {
-    localStorage.setItem("token", token);
-    setIsAuthenticated(true);
+    if (token && token !== "undefined") {
+      localStorage.setItem("token", token);
+      setIsAuthenticated(true);
+    } else {
+      console.warn("Invalid token passed to login()");
+    }
   };
 
   const logout = () => {
@@ -24,7 +31,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   useEffect(() => {
-    setIsAuthenticated(!!localStorage.getItem("token"));
+    if (!getValidToken()) {
+      localStorage.removeItem("token"); // Clean up just in case
+      setIsAuthenticated(false);
+    }
   }, []);
 
   return (
