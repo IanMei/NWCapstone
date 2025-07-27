@@ -9,12 +9,16 @@ type AuthContextType = {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const getValidToken = () => {
-    const token = localStorage.getItem("token");
-    return token && token !== "undefined" ? token : null;
-  };
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(!!getValidToken());
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (token && token !== "undefined") {
+      setIsAuthenticated(true);
+    }
+    setLoading(false);
+  }, []);
 
   const login = (token: string) => {
     if (token && token !== "undefined") {
@@ -30,13 +34,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setIsAuthenticated(false);
   };
 
-  useEffect(() => {
-    const token = getValidToken();
-    if (!token) {
-      localStorage.removeItem("token");
-      setIsAuthenticated(false);
-    }
-  }, []);
+  if (loading) return null; // Avoid rendering children too early
 
   return (
     <AuthContext.Provider value={{ isAuthenticated, login, logout }}>

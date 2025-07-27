@@ -4,14 +4,16 @@ import { BASE_URL } from "../../utils/api";
 
 type Photo = {
   id: number;
-  url: string;
-  caption?: string;
+  filename: string;
+  filepath: string;
+  uploaded_at: string;
 };
 
 export default function AlbumView() {
   const { albumId } = useParams();
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [file, setFile] = useState<File | null>(null);
+
   const token = localStorage.getItem("token");
 
   const fetchPhotos = async () => {
@@ -21,6 +23,11 @@ export default function AlbumView() {
           Authorization: `Bearer ${token}`,
         },
       });
+
+      if (!res.ok) {
+        throw new Error("Failed to load photos");
+      }
+
       const data = await res.json();
       setPhotos(data.photos);
     } catch (err) {
@@ -30,6 +37,7 @@ export default function AlbumView() {
 
   const handleUpload = async () => {
     if (!file) return;
+
     const formData = new FormData();
     formData.append("photo", file);
 
@@ -43,9 +51,12 @@ export default function AlbumView() {
       });
 
       const data = await res.json();
+
       if (res.ok) {
         setPhotos((prev) => [...prev, data.photo]);
         setFile(null);
+      } else {
+        console.error("Upload failed:", data);
       }
     } catch (err) {
       console.error("Upload failed:", err);
@@ -54,13 +65,18 @@ export default function AlbumView() {
 
   const deletePhoto = async (id: number) => {
     try {
-      await fetch(`${BASE_URL}/photos/${id}`, {
+      const res = await fetch(`${BASE_URL}/photos/${id}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
-      setPhotos((prev) => prev.filter((p) => p.id !== id));
+
+      if (res.ok) {
+        setPhotos((prev) => prev.filter((p) => p.id !== id));
+      } else {
+        console.error("Delete failed");
+      }
     } catch (err) {
       console.error("Delete failed:", err);
     }
@@ -72,7 +88,9 @@ export default function AlbumView() {
 
   return (
     <main className="p-6">
-      <h1 className="text-2xl font-bold text-[var(--primary)] mb-4">Album #{albumId}</h1>
+      <h1 className="text-2xl font-bold text-[var(--primary)] mb-4">
+        Album #{albumId}
+      </h1>
 
       {/* Upload */}
       <div className="flex gap-2 mb-6 items-center">
@@ -98,8 +116,8 @@ export default function AlbumView() {
           >
             <Link to={`/albums/${albumId}/photo/${photo.id}`}>
               <img
-                src={photo.url}
-                alt={photo.caption || ""}
+                src={`${BASE_URL}/${photo.filepath}`}
+                alt={photo.filename}
                 className="w-full h-48 object-cover"
               />
             </Link>
