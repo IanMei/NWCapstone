@@ -160,7 +160,7 @@ export default function AlbumView() {
           >
             <Link to={`/albums/${albumId}/photo/${photo.id}`}>
               <img
-                src={`http://localhost:5000/uploads/${photo.filepath}`}
+                src={`${BASE_URL.replace("/api", "")}/uploads/${photo.filepath}`}
                 alt={photo.filename}
                 className="w-full h-48 object-cover"
               />

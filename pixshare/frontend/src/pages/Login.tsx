@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-
-const BASE_URL = "http://localhost:5000/api";
+import { BASE_URL } from "../utils/api"; // ✅ import shared BASE_URL
 
 export default function Login() {
   const [formData, setFormData] = useState({ email: "", password: "" });
@@ -42,8 +41,7 @@ export default function Login() {
       if (typeof token === "string" && token !== "undefined" && token.length > 0) {
         localStorage.setItem("token", token);
         console.log("Token stored:", token);
-        // await new Promise((resolve) => setTimeout(resolve, 10));
-        login(token); // Context update
+        login(token); // ✅ Context update
         navigate("/dashboard");
       } else {
         throw new Error("Invalid token received from server");

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { BASE_URL } from "../utils/api"; // ✅ centralized API base URL
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -17,19 +18,22 @@ const Register = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
+
     try {
-      const res = await fetch("http://localhost:5000/api/auth/register", {
+      const res = await fetch(`${BASE_URL}/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
       });
 
+      const data = await res.json();
+
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.message || "Registration failed");
+        const message = data?.msg || data?.message || "Registration failed";
+        throw new Error(message);
       }
 
-      setError("");
       navigate("/login"); // redirect to login after success
     } catch (err: any) {
       setError(err.message || "Something went wrong");
@@ -101,7 +105,6 @@ const Register = () => {
         </button>
 
         <p className="text-sm text-center mt-2">
-          {" "}
           <Link to="/login" className="text-[var(--primary)] hover:underline">
             Already have an account? Log in
           </Link>

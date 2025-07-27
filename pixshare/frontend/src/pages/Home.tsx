@@ -6,7 +6,7 @@ export default function Home() {
       <h1 className="text-5xl font-bold mb-6 text-[var(--primary)]">Welcome to PixShare</h1>
       <p className="text-lg max-w-xl mb-8 text-[var(--secondary)]">
         Securely upload, manage, and share your photos and videos in the cloud.
-        Designed for simplicity, privacy, and future flexibility.
+        Designed for simplicity, privacy, and online editing.
       </p>
       <Link
         to="/login"
