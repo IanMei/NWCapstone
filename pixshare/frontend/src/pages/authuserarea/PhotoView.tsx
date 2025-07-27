@@ -1,17 +1,19 @@
 import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
-import { BASE_URL } from "../../utils/api";
+import { BASE_URL, PHOTO_BASE_URL } from "../../utils/api";
 
 type Comment = {
   id: number;
   content: string;
   author: string;
+  created_at: string;
 };
 
 type Photo = {
   id: number;
-  url: string;
-  caption?: string;
+  filename: string;
+  filepath: string;
+  uploaded_at: string;
 };
 
 export default function PhotoView() {
@@ -22,36 +24,73 @@ export default function PhotoView() {
   const token = localStorage.getItem("token");
 
   useEffect(() => {
-    fetch(`${BASE_URL}/photos/${photoId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((res) => res.json())
-      .then((data) => setPhoto(data.photo));
+    const fetchPhotoFromAlbum = async () => {
+      try {
+        const res = await fetch(`${BASE_URL}/albums/${albumId}/photos`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
 
-    fetch(`${BASE_URL}/photos/${photoId}/comments`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((res) => res.json())
-      .then((data) => setComments(data.comments));
-  }, [photoId]);
+        if (!res.ok) throw new Error(data?.msg || "Failed to load photos");
+
+        const matched = data.photos.find(
+          (p: Photo) => p.id.toString() === photoId
+        );
+
+        if (matched) {
+          setPhoto(matched);
+        } else {
+          throw new Error("Photo not found in album");
+        }
+      } catch (err) {
+        console.error("Photo fetch error:", err);
+      }
+    };
+
+    const fetchComments = async () => {
+      try {
+        const res = await fetch(`${BASE_URL}/photos/${photoId}/comments`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (res.ok) {
+          setComments(data.comments);
+        } else {
+          console.error("Comment fetch failed:", data);
+        }
+      } catch (err) {
+        console.error("Failed to load comments:", err);
+      }
+    };
+
+    fetchPhotoFromAlbum();
+    fetchComments();
+  }, [albumId, photoId, token]);
 
   const handleCommentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newComment.trim()) return;
 
-    const res = await fetch(`${BASE_URL}/photos/${photoId}/comments`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ content: newComment }),
-    });
+    try {
+      const res = await fetch(`${BASE_URL}/photos/${photoId}/comments`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ content: newComment }),
+      });
 
-    const data = await res.json();
-    if (res.ok) {
-      setComments((prev) => [...prev, data.comment]);
-      setNewComment("");
+      const data = await res.json();
+
+      if (res.ok) {
+        setComments((prev) => [...prev, data.comment]);
+        setNewComment("");
+      } else {
+        console.error("Comment post failed:", data);
+      }
+    } catch (err) {
+      console.error("Comment post error:", err);
     }
   };
 
@@ -62,15 +101,15 @@ export default function PhotoView() {
       {photo ? (
         <>
           <img
-            src={photo.url}
-            alt={photo.caption || ""}
+            src={`${PHOTO_BASE_URL}/uploads/${photo.filepath}`}
+            alt={photo.filename}
             className="w-full rounded shadow mb-4"
           />
           <p className="text-lg text-[var(--primary)] mb-2">
-            {photo.caption || "Untitled Photo"}
+            {photo.filename || "Untitled Photo"}
           </p>
 
-          {/* Sharing */}
+          {/* Share */}
           <div className="mb-6">
             <label className="block text-sm text-gray-600 mb-1">Share Link:</label>
             <div className="flex">
@@ -95,6 +134,9 @@ export default function PhotoView() {
               {comments.map((c) => (
                 <li key={c.id} className="bg-white rounded px-4 py-2 shadow text-sm">
                   <strong>{c.author}</strong>: {c.content}
+                  <div className="text-xs text-gray-500">
+                    {new Date(c.created_at).toLocaleString()}
+                  </div>
                 </li>
               ))}
             </ul>
