@@ -5,14 +5,16 @@ import { BASE_URL } from "../../utils/api";
 type Photo = {
   id: number;
   filename: string;
-  filepath: string;
+  filepath: string; // e.g., "photos/3/Vacation/image.jpg"
   uploaded_at: string;
 };
 
 export default function AlbumView() {
   const { albumId } = useParams();
   const [photos, setPhotos] = useState<Photo[]>([]);
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [albumName, setAlbumName] = useState<string>("");
 
   const token = localStorage.getItem("token");
 
@@ -24,10 +26,7 @@ export default function AlbumView() {
         },
       });
 
-      if (!res.ok) {
-        throw new Error("Failed to load photos");
-      }
-
+      if (!res.ok) throw new Error("Failed to load photos");
       const data = await res.json();
       setPhotos(data.photos);
     } catch (err) {
@@ -35,13 +34,32 @@ export default function AlbumView() {
     }
   };
 
+  const fetchAlbumName = async () => {
+    try {
+      const res = await fetch(`${BASE_URL}/albums/${albumId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!res.ok) throw new Error("Failed to load album name");
+      const data = await res.json();
+      setAlbumName(data.name);
+    } catch (err) {
+      console.error("Failed to load album name:", err);
+    }
+  };
+
   const handleUpload = async () => {
-    if (!file) return;
+    if (!files.length) return;
 
     const formData = new FormData();
-    formData.append("photo", file);
+    files.forEach((file) => {
+      formData.append("photos", file);
+    });
 
     try {
+      setUploading(true);
       const res = await fetch(`${BASE_URL}/albums/${albumId}/photos`, {
         method: "POST",
         headers: {
@@ -53,13 +71,15 @@ export default function AlbumView() {
       const data = await res.json();
 
       if (res.ok) {
-        setPhotos((prev) => [...prev, data.photo]);
-        setFile(null);
+        setPhotos((prev) => [...prev, ...data.photos]);
+        setFiles([]);
       } else {
         console.error("Upload failed:", data);
       }
     } catch (err) {
       console.error("Upload failed:", err);
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -83,28 +103,52 @@ export default function AlbumView() {
   };
 
   useEffect(() => {
+    fetchAlbumName();
     fetchPhotos();
   }, [albumId]);
 
   return (
     <main className="p-6">
       <h1 className="text-2xl font-bold text-[var(--primary)] mb-4">
-        Album #{albumId}
+        {albumName ? `Album: ${albumName}` : `Album #${albumId}`}
       </h1>
 
-      {/* Upload */}
-      <div className="flex gap-2 mb-6 items-center">
-        <input
-          type="file"
-          accept="image/*"
-          onChange={(e) => setFile(e.target.files?.[0] || null)}
-        />
+      {/* Upload Section */}
+      <div className="flex flex-col gap-4 mb-6 items-start">
+        <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
+          <label className="font-medium text-gray-700">Select photo(s):</label>
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={(e) => setFiles(Array.from(e.target.files || []))}
+          />
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
+          <label className="font-medium text-gray-700">Or upload folder:</label>
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            // @ts-ignore
+            webkitdirectory=""
+            directory=""
+            onChange={(e) => setFiles(Array.from(e.target.files || []))}
+          />
+        </div>
+
         <button
           onClick={handleUpload}
+          disabled={!files.length || uploading}
           className="bg-[var(--accent)] hover:bg-[var(--accent-dark)] text-white px-4 py-2 rounded"
         >
-          Upload
+          {uploading ? "Uploading..." : "Upload"}
         </button>
+
+        {files.length > 0 && (
+          <p className="text-sm text-gray-600">{files.length} file(s) selected</p>
+        )}
       </div>
 
       {/* Photo Grid */}
@@ -116,7 +160,7 @@ export default function AlbumView() {
           >
             <Link to={`/albums/${albumId}/photo/${photo.id}`}>
               <img
-                src={`${BASE_URL}/${photo.filepath}`}
+                src={`http://localhost:5000/uploads/${photo.filepath}`}
                 alt={photo.filename}
                 className="w-full h-48 object-cover"
               />
