@@ -11,10 +11,10 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const getValidToken = () => {
     const token = localStorage.getItem("token");
-    return token && token !== "undefined";
+    return token && token !== "undefined" ? token : null;
   };
 
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(getValidToken());
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(!!getValidToken());
 
   const login = (token: string) => {
     if (token && token !== "undefined") {
@@ -31,8 +31,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   useEffect(() => {
-    if (!getValidToken()) {
-      localStorage.removeItem("token"); // Clean up just in case
+    const token = getValidToken();
+    if (!token) {
+      localStorage.removeItem("token");
       setIsAuthenticated(false);
     }
   }, []);
