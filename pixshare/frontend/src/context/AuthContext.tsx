@@ -12,29 +12,31 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  // On mount: check token from localStorage
   useEffect(() => {
     const token = localStorage.getItem("token");
-    if (token && token !== "undefined") {
-      setIsAuthenticated(true);
-    }
+    setIsAuthenticated(!!token && token !== "undefined");
     setLoading(false);
   }, []);
 
+  // Called when user logs in successfully
   const login = (token: string) => {
     if (token && token !== "undefined") {
       localStorage.setItem("token", token);
-      setIsAuthenticated(true);
+      setIsAuthenticated(true); // 🔄 Triggers rerender
     } else {
       console.warn("Invalid token passed to login()");
     }
   };
 
+  // Called when user logs out
   const logout = () => {
     localStorage.removeItem("token");
-    setIsAuthenticated(false);
+    setIsAuthenticated(false); // 🔄 Triggers rerender
   };
 
-  if (loading) return null; // Avoid rendering children too early
+  // Prevent app from rendering before auth check is done
+  if (loading) return null;
 
   return (
     <AuthContext.Provider value={{ isAuthenticated, login, logout }}>
@@ -43,8 +45,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   );
 };
 
+// Custom hook to access context safely
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) throw new Error("useAuth must be used within AuthProvider");
+  if (!context)
+    throw new Error("useAuth must be used within an AuthProvider");
   return context;
 };

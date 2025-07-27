@@ -43,7 +43,7 @@ export default function Login() {
         localStorage.setItem("token", token);
         console.log("Token stored:", token);
         // await new Promise((resolve) => setTimeout(resolve, 10));
-        login(); // Context update
+        login(token); // Context update
         navigate("/dashboard");
       } else {
         throw new Error("Invalid token received from server");

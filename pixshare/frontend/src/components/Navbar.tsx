@@ -53,7 +53,6 @@ export default function Navbar() {
             </Link>
           </>
         )}
-
         <ThemeSwitcher />
       </div>
     </nav>
