@@ -12,11 +12,16 @@ Stores registered user information.
 | `password_hash`| String       | Hashed password                    |
 | `created_at`   | DateTime     | When the user account was created  |
 
+**Relationships**:
+- `albums`: One-to-many
+- `events`: One-to-many
+- `comments`: One-to-many
+
 ---
 
 ## 2. Albums Table
 
-Each album belongs to one user and contains multiple photos.
+Each album belongs to one user and contains multiple photos and possibly comments.
 
 | Field         | Type         | Description                          |
 |--------------|--------------|--------------------------------------|
@@ -25,22 +30,30 @@ Each album belongs to one user and contains multiple photos.
 | `title`      | String       | Album title                          |
 | `created_at` | DateTime     | When the album was created           |
 
+**Relationships**:
+- `photos`: One-to-many
+- `comments`: One-to-many (optional)
+
 ---
 
 ## 3. Photos Table
 
-Stores image metadata and links them to albums.
+Stores image metadata and links them to albums and users.
 
 | Field         | Type         | Description                            |
 |--------------|--------------|----------------------------------------|
 | `id`         | Integer (PK) | Unique photo ID                        |
 | `album_id`   | Integer (FK) | References `albums.id`                 |
-| `user_id`    | Integer (FK) | Owner of the photo (optional fallback) |
+| `user_id`    | Integer (FK) | Owner of the photo                     |
 | `filename`   | String       | Name of the uploaded file              |
-| `file_path`  | String       | Path to the stored file on server      |
+| `filepath`   | String       | Relative path to stored file           |
 | `uploaded_at`| DateTime     | Upload timestamp                       |
 
-**Storage Directory**: `/uploads/photos/`
+**Relationships**:
+- `comments`: One-to-many
+- `user`: Photo owner
+
+**Storage Directory**: `/uploads/photos/<user_id>/<album_id>/`
 
 ---
 
@@ -56,6 +69,9 @@ Events link users to a set of photos (possibly cross-album).
 | `description`| Text         | Event description                   |
 | `date`       | Date         | Event date                          |
 
+**Relationships**:
+- `photos`: via `photo_event` (many-to-many)
+
 ---
 
 ## 5. Comments Table
@@ -65,13 +81,16 @@ Comments can be attached to either a photo or an album.
 | Field         | Type         | Description                              |
 |--------------|--------------|------------------------------------------|
 | `id`         | Integer (PK) | Unique comment ID                        |
-| `user_id`    | Integer (FK) | Comment author                           |
+| `user_id`    | Integer (FK) | Comment author (references `users.id`)   |
 | `photo_id`   | Integer (FK) | Nullable, reference to `photos.id`       |
 | `album_id`   | Integer (FK) | Nullable, reference to `albums.id`       |
 | `content`    | Text         | The comment content                      |
 | `created_at` | DateTime     | Timestamp of the comment                 |
 
-**Note**: Only one of `photo_id` or `album_id` should be non-null per row.
+**Relationships**:
+- Belongs to a `user`
+- Optional link to either a `photo` or an `album`
+- Should have **either** `photo_id` or `album_id`, **not both**
 
 ---
 
@@ -104,8 +123,20 @@ Links photos to events (many-to-many).
 
 ---
 
-## Security Considerations
+## ✅ Relationships Summary (per model)
 
-- Store `password_hash` using bcrypt.
-- Use JWT for auth; store user identity in the token.
-- Only allow access to photos/albums shared with or owned by the user.
+| Model   | Relationships |
+|---------|---------------|
+| `User`  | albums, events, comments |
+| `Album` | photos, comments         |
+| `Photo` | user (owner), comments   |
+| `Comment` | user, album?, photo?  |
+
+---
+
+## 🔐 Security Considerations
+
+- Passwords are hashed with `bcrypt`.
+- Authentication via JWT; token holds `sub` (user ID).
+- All protected routes require `@jwt_required()`.
+- File access should be restricted to users who own or were shared the album/photo.

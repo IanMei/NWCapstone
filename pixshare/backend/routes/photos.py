@@ -102,7 +102,6 @@ def delete_photo(photo_id):
     db.session.commit()
     return jsonify({"msg": "Photo deleted"}), 200
 
-# GET /api/photos/<photo_id>/comments — List comments for a photo
 @photos_bp.route("/photos/<int:photo_id>/comments", methods=["GET"])
 @jwt_required()
 def get_photo_comments(photo_id):
@@ -114,7 +113,7 @@ def get_photo_comments(photo_id):
         {
             "id": c.id,
             "content": c.content,
-            "author": c.user.name if c.user else "Unknown",
+            "author": c.user.full_name if c.user else "Unknown",
             "created_at": c.created_at.isoformat()
         }
         for c in comments
@@ -137,6 +136,8 @@ def post_comment(photo_id):
     if not photo:
         return jsonify({"msg": "Photo not found"}), 404
 
+    user = User.query.get(user_id)
+
     comment = Comment(
         content=content,
         user_id=user_id,
@@ -149,6 +150,7 @@ def post_comment(photo_id):
         "comment": {
             "id": comment.id,
             "content": comment.content,
-            "author": photo.user.username  # or however you're storing author
+            "author": user.full_name,
+            "created_at": comment.created_at.isoformat()
         }
     }), 201

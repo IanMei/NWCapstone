@@ -9,3 +9,7 @@ class Comment(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     album_id = db.Column(db.Integer, db.ForeignKey("album.id"), nullable=True)
     photo_id = db.Column(db.Integer, db.ForeignKey("photo.id"), nullable=True)
+
+    user = db.relationship("User", backref="user_comments", lazy=True)     # renamed
+    album = db.relationship("Album", backref="album_comments", lazy=True) # renamed
+    photo = db.relationship("Photo", backref="photo_comments", lazy=True) # renamed

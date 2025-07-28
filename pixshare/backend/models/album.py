@@ -8,4 +8,3 @@ class Album(db.Model):
 
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     photos = db.relationship("Photo", backref="album", lazy=True)
-    comments = db.relationship("Comment", backref="album", lazy=True)

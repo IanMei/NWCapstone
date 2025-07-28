@@ -9,4 +9,6 @@ class Photo(db.Model):
 
     album_id = db.Column(db.Integer, db.ForeignKey("album.id"), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    comments = db.relationship("Comment", backref="photo", lazy=True)
+
+    user = db.relationship("User", backref="photo_uploads", lazy=True)
+

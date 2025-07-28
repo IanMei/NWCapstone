@@ -9,5 +9,6 @@ class User(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     albums = db.relationship("Album", backref="owner", lazy=True)
-    photos = db.relationship("Photo", backref="uploader", lazy=True)
     events = db.relationship("Event", backref="creator", lazy=True)
+    photos = db.relationship("Photo", backref="uploader", lazy=True)
+    comments = db.relationship("Comment", backref="author", lazy=True)

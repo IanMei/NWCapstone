@@ -1,4 +1,4 @@
-# PixShare API Documentation (v1)
+# PixShare API Documentation (v1.1)
 
 ## Overview
 
@@ -9,11 +9,10 @@ PixShare is a photo management platform allowing users to manage albums, upload 
 ## API Sections
 
 - Authentication
-- User
 - Albums
 - Photos
-- Events
 - Comments
+- Events
 - Sharing
 - Dashboard
 
@@ -22,12 +21,13 @@ PixShare is a photo management platform allowing users to manage albums, upload 
 ## Authentication
 
 ### POST `/api/auth/register`
-Register a new user.
+
+Registers a new user.
 
 **Request Body**
 ```json
 {
-  "name": "Alice Smith",
+  "full_name": "Alice Smith",
   "email": "alice@example.com",
   "password": "securepassword"
 }
@@ -40,10 +40,9 @@ Register a new user.
 }
 ```
 
----
-
 ### POST `/api/auth/login`
-Log in an existing user.
+
+Logs in an existing user.
 
 **Request Body**
 ```json
@@ -60,11 +59,18 @@ Log in an existing user.
 }
 ```
 
+**Test Cases**
+- ✅ Register with valid data
+- ❌ Register with duplicate email
+- ✅ Login with correct credentials
+- ❌ Login with incorrect password
+
 ---
 
 ## Albums
 
 ### GET `/api/albums`
+
 Retrieve all albums for the authenticated user.
 
 **Response**
@@ -80,9 +86,8 @@ Retrieve all albums for the authenticated user.
 }
 ```
 
----
-
 ### POST `/api/albums`
+
 Create a new album.
 
 **Request Body**
@@ -103,9 +108,8 @@ Create a new album.
 }
 ```
 
----
-
 ### DELETE `/api/albums/<album_id>`
+
 Delete an album by ID.
 
 **Response**
@@ -115,32 +119,58 @@ Delete an album by ID.
 }
 ```
 
+**Test Cases**
+- ✅ Create album with valid title
+- ❌ Create album without title
+- ✅ Fetch albums after creation
+- ✅ Delete an album
+
 ---
 
 ## Photos
 
-### POST `/api/photos`
-Upload a photo.
+### GET `/api/albums/<album_id>/photos`
 
-**Request (multipart/form-data)**
-- `album_id`: number
-- `image`: file
+Retrieve photos from a given album.
 
 **Response**
 ```json
 {
-  "photo": {
-    "id": 10,
-    "filename": "beach.jpg",
-    "url": "/uploads/photos/10.jpg"
-  }
+  "photos": [
+    {
+      "id": 1,
+      "filename": "beach.jpg",
+      "filepath": "photos/2/1/beach.jpg",
+      "uploaded_at": "2025-07-25T14:01:03"
+    }
+  ]
 }
 ```
 
----
+### POST `/api/albums/<album_id>/photos`
+
+Upload photo(s) to an album.
+
+**Request (multipart/form-data)**
+- photos[]: multiple image files
+
+**Response**
+```json
+{
+  "photos": [
+    {
+      "id": 10,
+      "filename": "beach.jpg",
+      "filepath": "photos/2/1/beach.jpg",
+      "uploaded_at": "2025-07-25T14:01:03"
+    }
+  ]
+}
+```
 
 ### DELETE `/api/photos/<photo_id>`
-Delete a photo.
+
+Deletes a photo.
 
 **Response**
 ```json
@@ -149,11 +179,84 @@ Delete a photo.
 }
 ```
 
+**Test Cases**
+- ✅ Upload a valid image file
+- ❌ Upload without file
+- ✅ Delete an uploaded photo
+
+---
+
+## Comments
+
+### GET `/api/photos/<photo_id>/comments`
+
+Retrieve comments for a photo.
+
+**Response**
+```json
+{
+  "comments": [
+    {
+      "id": 1,
+      "content": "Nice shot!",
+      "author": "Alice Smith",
+      "created_at": "2025-07-25T15:00:00"
+    }
+  ]
+}
+```
+
+### POST `/api/photos/<photo_id>/comments`
+
+Add a comment to a photo.
+
+**Request Body**
+```json
+{
+  "content": "Beautiful shot!"
+}
+```
+
+**Response**
+```json
+{
+  "comment": {
+    "id": 12,
+    "content": "Beautiful shot!",
+    "author": "Alice Smith"
+  }
+}
+```
+
+**Test Cases**
+- ✅ Post a valid comment
+- ❌ Post with empty content
+- ✅ View comment under a photo
+
 ---
 
 ## Events
 
+### GET `/api/events`
+
+Retrieve events for the user.
+
+**Response**
+```json
+{
+  "events": [
+    {
+      "id": 5,
+      "title": "Wedding",
+      "description": "John and Jane's wedding",
+      "date": "2025-08-01"
+    }
+  ]
+}
+```
+
 ### POST `/api/events`
+
 Create an event.
 
 **Request Body**
@@ -176,78 +279,29 @@ Create an event.
 }
 ```
 
----
-
-### GET `/api/events`
-List all events for the user.
-
-**Response**
-```json
-{
-  "events": [
-    {
-      "id": 5,
-      "title": "Wedding",
-      "date": "2025-08-01"
-    }
-  ]
-}
-```
-
----
-
-## Comments
-
-### POST `/api/comments/photo/<photo_id>`
-Add a comment to a photo.
-
-**Request Body**
-```json
-{
-  "content": "Beautiful shot!"
-}
-```
-
-**Response**
-```json
-{
-  "comment": {
-    "id": 12,
-    "content": "Beautiful shot!",
-    "author": "alice@example.com"
-  }
-}
-```
-
----
-
-### POST `/api/comments/album/<album_id>`
-Add a comment to an album.
-
-**Request Body**
-```json
-{
-  "content": "Amazing memories."
-}
-```
-
-**Response**
-```json
-{
-  "comment": {
-    "id": 15,
-    "content": "Amazing memories.",
-    "author": "bob@example.com"
-  }
-}
-```
+**Test Cases**
+- ✅ Create a valid event
+- ❌ Missing title or date
 
 ---
 
 ## Sharing
 
+### GET `/api/shared`
+
+Retrieve content shared with the user.
+
+**Response**
+```json
+{
+  "shared_albums": [],
+  "shared_photos": []
+}
+```
+
 ### POST `/api/share/album/<album_id>`
-Share an entire album with another user.
+
+Share an album.
 
 **Request Body**
 ```json
@@ -263,10 +317,9 @@ Share an entire album with another user.
 }
 ```
 
----
-
 ### POST `/api/share/photo/<photo_id>`
-Share a single photo with another user.
+
+Share a photo.
 
 **Request Body**
 ```json
@@ -282,76 +335,26 @@ Share a single photo with another user.
 }
 ```
 
----
-
-### POST `/api/share/album/<album_id>/photos`
-Share multiple photos from an album.
-
-**Request Body**
-```json
-{
-  "target_email": "bob@example.com",
-  "photo_ids": [3, 5, 7]
-}
-```
-
-**Response**
-```json
-{
-  "msg": "Selected photos shared with bob@example.com"
-}
-```
-
----
-
-### GET `/api/shared`
-Get content shared with the authenticated user.
-
-**Response**
-```json
-{
-  "shared_albums": [
-    {
-      "id": 21,
-      "title": "Trip to Japan",
-      "owner": "alice@example.com"
-    }
-  ],
-  "shared_photos": [
-    {
-      "id": 45,
-      "filename": "tokyo.jpg",
-      "url": "/uploads/shared/45.jpg",
-      "owner": "alice@example.com"
-    }
-  ]
-}
-```
-
----
-
-### DELETE `/api/share/<share_id>`
-Revoke a sharing link.
-
-**Response**
-```json
-{
-  "msg": "Share removed"
-}
-```
+**Test Cases**
+- ✅ Share photo with valid user
+- ❌ Share to unregistered email
 
 ---
 
 ## Dashboard
 
 ### GET `/api/dashboard`
-Retrieve user statistics.
+
+Get user statistics.
 
 **Response**
 ```json
 {
-  "total_albums": 6,
-  "total_photos": 105,
-  "shared_items": 17
+  "total_albums": 5,
+  "total_photos": 53,
+  "shared_items": 12
 }
 ```
+
+**Test Cases**
+- ✅ Fetch dashboard after login
