@@ -2,7 +2,7 @@
 
 This is the Northwestern MSIS capstone project supervised by Prof.Amul Chapla & TA Cesar Martinez .
 
--- Contributer: Ian Mei
+-- Contributors: Ian Mei， Kewen An， Zhiying(Questa) Quan.
 
 ### Functions and Pages Accomplished:
 -  Authentication
@@ -14,7 +14,7 @@ This is the Northwestern MSIS capstone project supervised by Prof.Amul Chapla & 
 -  Sharing
 -  Events
 
-## Projecet progress
+## Project progress
 ██████████░░░░░ 80%
 
 ## Project Introduction
