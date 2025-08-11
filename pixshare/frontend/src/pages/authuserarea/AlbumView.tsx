@@ -16,12 +16,14 @@ export default function AlbumView() {
   const [uploading, setUploading] = useState(false);
   const [albumName, setAlbumName] = useState<string>("");
 
-  const token = localStorage.getItem("token");
+  const token = localStorage.getItem("token") || "";
 
   const fetchPhotos = async () => {
     try {
       const res = await fetch(`${BASE_URL}/albums/${albumId}/photos`, {
+        method: "GET",
         headers: { Authorization: `Bearer ${token}` },
+        credentials: "include", // ✅ send & accept cookies
       });
       if (!res.ok) throw new Error("Failed to load photos");
       const data = await res.json();
@@ -34,7 +36,9 @@ export default function AlbumView() {
   const fetchAlbumName = async () => {
     try {
       const res = await fetch(`${BASE_URL}/albums/${albumId}`, {
+        method: "GET",
         headers: { Authorization: `Bearer ${token}` },
+        credentials: "include", // ✅
       });
       if (!res.ok) throw new Error("Failed to load album name");
       const data = await res.json();
@@ -54,10 +58,11 @@ export default function AlbumView() {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
+        credentials: "include", // ✅
       });
       const data = await res.json();
       if (res.ok) {
-        setPhotos((prev) => [...prev, ...data.photos]); // ✅ count auto-updates via length
+        setPhotos((prev) => [...prev, ...data.photos]);
         setFiles([]);
       } else {
         console.error("Upload failed:", data);
@@ -74,9 +79,10 @@ export default function AlbumView() {
       const res = await fetch(`${BASE_URL}/photos/${id}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
+        credentials: "include", // ✅
       });
       if (res.ok) {
-        setPhotos((prev) => prev.filter((p) => p.id !== id)); // ✅ updates count
+        setPhotos((prev) => prev.filter((p) => p.id !== id));
       } else {
         console.error("Delete failed");
       }
@@ -88,6 +94,7 @@ export default function AlbumView() {
   useEffect(() => {
     fetchAlbumName();
     fetchPhotos();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [albumId]);
 
   return (
@@ -95,7 +102,7 @@ export default function AlbumView() {
       <h1 className="text-2xl font-bold text-[var(--primary)] mb-2">
         {albumName ? `Album: ${albumName}` : `Album #${albumId}`}
       </h1>
-      <p className="text-sm text-gray-600 mb-4">{photos.length} photos</p> {/* ✅ count */}
+      <p className="text-sm text-gray-600 mb-4">{photos.length} photos</p>
 
       {/* Upload Section */}
       <div className="flex flex-col gap-4 mb-6 items-start">

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { BASE_URL } from "../utils/api"; // ✅ import shared BASE_URL
+import { BASE_URL } from "../utils/api"; // ✅ centralized API base (/api via Vite proxy)
 
 export default function Login() {
   const [formData, setFormData] = useState({ email: "", password: "" });
@@ -29,28 +29,32 @@ export default function Login() {
       const res = await fetch(`${BASE_URL}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include", // ✅ accept/set HttpOnly JWT cookie
         body: JSON.stringify(formData),
       });
 
-      const data = await res.json();
-      console.log("Login response data:", data);
+      // Try to parse JSON safely (some network errors return empty body)
+      let data: any = {};
+      try {
+        data = await res.json();
+      } catch {
+        /* ignore parse error; we'll handle via res.ok */
+      }
 
-      if (!res.ok) throw new Error(data.msg || "Login failed");
+      if (!res.ok) throw new Error(data?.msg || "Login failed");
 
-      const token = data.token;
+      const token = data?.token;
       if (typeof token === "string" && token !== "undefined" && token.length > 0) {
-        localStorage.setItem("token", token);
-        console.log("Token stored:", token);
-        login(token); // ✅ Context update
+        localStorage.setItem("token", token); // used for Authorization header on API calls
+        login(token);                          // update context
         navigate("/dashboard");
       } else {
         throw new Error("Invalid token received from server");
       }
     } catch (err: any) {
       console.error("Login error:", err);
-      setError(err.message || "Network error");
+      setError(err?.message || "Network error");
     }
-
   };
 
   return (
@@ -95,4 +99,3 @@ export default function Login() {
     </main>
   );
 }
-

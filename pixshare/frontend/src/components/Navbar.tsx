@@ -7,9 +7,19 @@ export default function Navbar() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const handleLogout = () => {
-    logout();
-    navigate("/"); // Redirect to homepage after logout
+  const handleLogout = async () => {
+    try {
+      // Ensure the HttpOnly JWT cookie is cleared server-side
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include", // ✅ send cookie to server so it can unset it
+      });
+    } catch {
+      // ignore—client state will still be cleared by logout()
+    } finally {
+      await logout(); // clears local token + context state
+      navigate("/");  // redirect to homepage after logout
+    }
   };
 
   const linkClass = (path: string) =>

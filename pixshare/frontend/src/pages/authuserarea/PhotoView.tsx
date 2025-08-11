@@ -22,13 +22,15 @@ export default function PhotoView() {
   const [photo, setPhoto] = useState<Photo | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState("");
-  const token = localStorage.getItem("token");
+  const token = localStorage.getItem("token") || "";
 
   useEffect(() => {
     const fetchPhotoFromAlbum = async () => {
       try {
         const res = await fetch(`${BASE_URL}/albums/${albumId}/photos`, {
+          method: "GET",
           headers: { Authorization: `Bearer ${token}` },
+          credentials: "include", // ✅ send/receive cookie
         });
         const data = await res.json();
 
@@ -45,7 +47,9 @@ export default function PhotoView() {
     const fetchComments = async () => {
       try {
         const res = await fetch(`${BASE_URL}/photos/${photoId}/comments`, {
+          method: "GET",
           headers: { Authorization: `Bearer ${token}` },
+          credentials: "include", // ✅
         });
         const data = await res.json();
         if (res.ok) setComments(data.comments);
@@ -70,6 +74,7 @@ export default function PhotoView() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
+        credentials: "include", // ✅
         body: JSON.stringify({ content: newComment }),
       });
 
@@ -91,6 +96,7 @@ export default function PhotoView() {
       const res = await fetch(`${BASE_URL}/photos/${photoId}/comments/${commentId}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
+        credentials: "include", // ✅
       });
 
       if (res.ok) {
@@ -104,7 +110,10 @@ export default function PhotoView() {
     }
   };
 
-  const shareUrl = `${window.location.origin}/shared/photo/${photoId}`;
+  // ✅ Dynamic share link that matches current host/port/protocol (works on LAN/prod)
+  const currentHost = window.location.host;       // e.g., 192.168.1.10:5173
+  const currentProtocol = window.location.protocol; // http: or https:
+  const shareUrl = `${currentProtocol}//${currentHost}/shared/photo/${photoId}`;
 
   return (
     <main className="p-6 max-w-3xl mx-auto">
@@ -119,7 +128,7 @@ export default function PhotoView() {
       {photo ? (
         <>
           <img
-            src={`${PHOTO_BASE_URL}/uploads/${photo.filepath}`}
+            src={`${PHOTO_BASE_URL}/uploads/${photo.filepath}`} // resolves to /uploads/... via Vite proxy
             alt={photo.filename}
             className="w-full rounded shadow mb-4"
           />
