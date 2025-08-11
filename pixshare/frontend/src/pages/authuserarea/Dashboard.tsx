@@ -9,45 +9,58 @@ type Album = {
 
 export default function Dashboard() {
   const [albums, setAlbums] = useState<Album[]>([]);
-  const [storageUsed, setStorageUsed] = useState<number>(0); // in GB
-  const storageLimit = 10;
+  const [storageUsed, setStorageUsed] = useState<number>(0); // GB
+  const [storageLimit, setStorageLimit] = useState<number>(10); // GB (server returns 10 currently)
   const navigate = useNavigate();
 
-  const fetchAlbums = async () => {
-    const token = localStorage.getItem("token");
+  const token = localStorage.getItem("token");
+  const authHeader = {
+    Authorization: `Bearer ${token}`,
+  };
+
+  const ensureAuthOrRedirect = () => {
     if (!token || token === "undefined") {
       navigate("/login");
-      return;
+      return false;
     }
+    return true;
+  };
 
+  const fetchAlbums = async () => {
+    if (!ensureAuthOrRedirect()) return;
     try {
-      const res = await fetch(`${BASE_URL}/albums`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data?.msg || "Failed to fetch albums");
-      }
-
+      const res = await fetch(`${BASE_URL}/albums`, { headers: authHeader });
       const data = await res.json();
+      if (!res.ok) throw new Error(data?.msg || "Failed to fetch albums");
       setAlbums(data.albums || []);
-
-      // Simulate storage calculation: 0.03 GB per album
-      const totalUsed = data.albums.length * 0.03;
-      setStorageUsed(Number(totalUsed.toFixed(2)));
     } catch (err) {
       console.error("Failed to fetch dashboard albums:", err);
     }
   };
 
+  const fetchStorage = async () => {
+    if (!ensureAuthOrRedirect()) return;
+    try {
+      const res = await fetch(`${BASE_URL}/dashboard/storage`, { headers: authHeader });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.msg || "Failed to fetch storage");
+      // API returns { used_gb: number, limit_gb: number }
+      setStorageUsed(Number(data.used_gb || 0));
+      setStorageLimit(Number(data.limit_gb || 10));
+    } catch (err) {
+      console.error("Failed to fetch storage:", err);
+    }
+  };
+
   useEffect(() => {
     fetchAlbums();
+    fetchStorage();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const recentAlbums = albums.slice(-3).reverse(); // latest 3
+  const pct =
+    storageLimit > 0 ? Math.min(100, Math.round((storageUsed / storageLimit) * 100)) : 0;
 
   return (
     <main className="p-6">
@@ -56,14 +69,17 @@ export default function Dashboard() {
       {/* Storage Summary */}
       <section className="mb-6 p-4 bg-white rounded shadow">
         <h2 className="text-xl font-semibold mb-2 text-[var(--primary)]">Storage Usage</h2>
-        <div className="w-full bg-gray-200 rounded h-4 mb-2">
+        <div className="w-full bg-gray-200 rounded h-4 mb-2 overflow-hidden">
           <div
-            className="h-4 rounded bg-[var(--accent)]"
-            style={{ width: `${(storageUsed / storageLimit) * 100}%` }}
+            className="h-4 rounded bg-[var(--accent)] transition-all"
+            style={{ width: `${pct}%` }}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={pct}
           />
         </div>
         <p className="text-sm text-gray-600">
-          {storageUsed} GB of {storageLimit} GB used
+          {storageUsed.toFixed(2)} GB of {storageLimit.toFixed(2)} GB used ({pct}%)
         </p>
       </section>
 

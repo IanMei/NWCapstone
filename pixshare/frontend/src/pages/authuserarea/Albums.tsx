@@ -5,6 +5,7 @@ import { BASE_URL } from "../../utils/api";
 type Album = {
   id: number;
   name: string;
+  photo_count?: number; // ✅ added
 };
 
 export default function Albums() {
@@ -20,17 +21,10 @@ export default function Albums() {
   const fetchAlbums = async (token: string) => {
     try {
       const res = await fetch(`${BASE_URL}/albums`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
-
       const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data?.msg || "Failed to fetch albums");
-      }
-
+      if (!res.ok) throw new Error(data?.msg || "Failed to fetch albums");
       setAlbums(data.albums);
     } catch (err) {
       console.error("Failed to fetch albums:", err);
@@ -39,10 +33,7 @@ export default function Albums() {
 
   const createAlbum = async () => {
     const token = getToken();
-    if (!token) return;
-
-    if (!newAlbumName.trim()) return;
-
+    if (!token || !newAlbumName.trim()) return;
     try {
       const res = await fetch(`${BASE_URL}/albums`, {
         method: "POST",
@@ -52,11 +43,9 @@ export default function Albums() {
         },
         body: JSON.stringify({ name: newAlbumName }),
       });
-
       const data = await res.json();
-
       if (res.ok) {
-        setAlbums((prev) => [...prev, data.album]);
+        setAlbums((prev) => [...prev, { ...data.album, photo_count: 0 }]); // ✅ start at 0
         setNewAlbumName("");
       } else {
         throw new Error(data?.msg || "Failed to create album");
@@ -69,27 +58,21 @@ export default function Albums() {
   const deleteAlbum = async (id: number) => {
     const token = getToken();
     if (!token) return;
-
     try {
       const res = await fetch(`${BASE_URL}/albums/${id}`, {
         method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
-
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data?.msg || "Failed to delete album");
       }
-
       setAlbums((prev) => prev.filter((a) => a.id !== id));
     } catch (err) {
       console.error("Failed to delete album:", err);
     }
   };
 
-  // Auth check and initial fetch
   useEffect(() => {
     const token = getToken();
     if (!token) {
@@ -129,7 +112,12 @@ export default function Albums() {
               to={`/albums/${album.id}`}
               className="text-lg text-[var(--secondary)] hover:underline"
             >
-              {album.name}
+              <div className="flex items-center gap-2">
+                <span>{album.name}</span>
+                <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-700">
+                  {(album.photo_count ?? 0)} photos
+                </span>
+              </div>
             </Link>
             <button
               onClick={() => deleteAlbum(album.id)}

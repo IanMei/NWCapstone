@@ -27,12 +27,13 @@ def get_photos(album_id):
     return jsonify({
         "photos": [
             {
-                "id": photo.id,
-                "filename": photo.filename,
-                "filepath": photo.filepath,
-                "uploaded_at": photo.uploaded_at.isoformat()
+                "id": p.id,
+                "filename": p.filename,
+                "filepath": p.filepath,
+                "uploaded_at": p.uploaded_at.isoformat(),
+                "size": getattr(p, "size", 0),
             }
-            for photo in photos
+            for p in photos
         ]
     }), 200
 
@@ -51,7 +52,7 @@ def upload_photos(album_id):
     saved_photos = []
 
     for file in files:
-        if file.filename == "":
+        if not file or file.filename == "":
             continue
 
         filename = secure_filename(file.filename)
@@ -64,11 +65,18 @@ def upload_photos(album_id):
         # ✅ Relative path from the /uploads folder
         rel_path = os.path.relpath(filepath, BASE_UPLOAD_DIR)
 
+        # ✅ Record file size in bytes
+        try:
+            size_bytes = os.path.getsize(filepath)
+        except OSError:
+            size_bytes = 0
+
         photo = Photo(
             filename=filename,
             filepath=rel_path,
             album_id=album.id,
-            user_id=user_id
+            user_id=user_id,
+            size=size_bytes,
         )
         db.session.add(photo)
         saved_photos.append(photo)
@@ -78,11 +86,12 @@ def upload_photos(album_id):
     return jsonify({
         "photos": [
             {
-                "id": photo.id,
-                "filename": photo.filename,
-                "filepath": photo.filepath,
-                "uploaded_at": photo.uploaded_at.isoformat()
-            } for photo in saved_photos
+                "id": p.id,
+                "filename": p.filename,
+                "filepath": p.filepath,
+                "uploaded_at": p.uploaded_at.isoformat(),
+                "size": getattr(p, "size", 0),
+            } for p in saved_photos
         ]
     }), 201
 
@@ -96,7 +105,10 @@ def delete_photo(photo_id):
 
     full_path = os.path.join(BASE_UPLOAD_DIR, photo.filepath)
     if os.path.exists(full_path):
-        os.remove(full_path)
+        try:
+            os.remove(full_path)
+        except OSError:
+            pass
 
     db.session.delete(photo)
     db.session.commit()
@@ -154,3 +166,32 @@ def post_comment(photo_id):
             "created_at": comment.created_at.isoformat()
         }
     }), 201
+
+
+# helper to coerce JWT identity to int when possible
+def _current_user_id():
+    uid = get_jwt_identity()
+    try:
+        return int(uid)
+    except (TypeError, ValueError):
+        return uid  # fall back to original if truly non-numeric
+
+@photos_bp.route("/photos/<int:photo_id>/comments/<int:comment_id>", methods=["DELETE"])
+@jwt_required()
+def delete_photo_comment(photo_id, comment_id):
+    """Delete a specific comment on a photo. Only the author can delete."""
+    user_id = _current_user_id()
+
+    # Ensure the comment exists and belongs to this photo
+    comment = Comment.query.filter_by(id=comment_id, photo_id=photo_id).first()
+    if not comment:
+        return jsonify({"msg": "Comment not found"}), 404
+
+    # Authorization: only the author can delete their comment
+    # Compare as strings to be extra-safe against int/str mismatches
+    if str(comment.user_id) != str(user_id):
+        return jsonify({"msg": "Not authorized to delete this comment"}), 403
+
+    db.session.delete(comment)
+    db.session.commit()
+    return jsonify({"msg": "Comment deleted", "id": comment_id}), 200

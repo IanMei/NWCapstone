@@ -18,12 +18,14 @@ PHOTO_UPLOAD_ROOT = os.path.join(BASE_UPLOAD_DIR, "photos")
 def get_albums():
     user_id = get_jwt_identity()
     albums = Album.query.filter_by(user_id=user_id).all()
+
     return jsonify({
         "albums": [
             {
                 "id": album.id,
                 "name": album.title,
-                "created_at": album.created_at.isoformat()
+                "created_at": album.created_at.isoformat(),
+                "photo_count": len(album.photos)  # <-- count photos
             }
             for album in albums
         ]
@@ -41,7 +43,8 @@ def get_album(album_id):
     return jsonify({
         "id": album.id,
         "name": album.title,
-        "created_at": album.created_at.isoformat()
+        "created_at": album.created_at.isoformat(),
+        "photo_count": len(album.photos)  # <-- add here too
     }), 200
 
 # POST /api/albums — Create a new album

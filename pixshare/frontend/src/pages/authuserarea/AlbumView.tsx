@@ -5,7 +5,7 @@ import { BASE_URL } from "../../utils/api";
 type Photo = {
   id: number;
   filename: string;
-  filepath: string; // e.g., "photos/3/Vacation/image.jpg"
+  filepath: string;
   uploaded_at: string;
 };
 
@@ -21,11 +21,8 @@ export default function AlbumView() {
   const fetchPhotos = async () => {
     try {
       const res = await fetch(`${BASE_URL}/albums/${albumId}/photos`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
-
       if (!res.ok) throw new Error("Failed to load photos");
       const data = await res.json();
       setPhotos(data.photos);
@@ -37,11 +34,8 @@ export default function AlbumView() {
   const fetchAlbumName = async () => {
     try {
       const res = await fetch(`${BASE_URL}/albums/${albumId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
-
       if (!res.ok) throw new Error("Failed to load album name");
       const data = await res.json();
       setAlbumName(data.name);
@@ -52,26 +46,18 @@ export default function AlbumView() {
 
   const handleUpload = async () => {
     if (!files.length) return;
-
     const formData = new FormData();
-    files.forEach((file) => {
-      formData.append("photos", file);
-    });
-
+    files.forEach((file) => formData.append("photos", file));
     try {
       setUploading(true);
       const res = await fetch(`${BASE_URL}/albums/${albumId}/photos`, {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
         body: formData,
       });
-
       const data = await res.json();
-
       if (res.ok) {
-        setPhotos((prev) => [...prev, ...data.photos]);
+        setPhotos((prev) => [...prev, ...data.photos]); // ✅ count auto-updates via length
         setFiles([]);
       } else {
         console.error("Upload failed:", data);
@@ -87,13 +73,10 @@ export default function AlbumView() {
     try {
       const res = await fetch(`${BASE_URL}/photos/${id}`, {
         method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
-
       if (res.ok) {
-        setPhotos((prev) => prev.filter((p) => p.id !== id));
+        setPhotos((prev) => prev.filter((p) => p.id !== id)); // ✅ updates count
       } else {
         console.error("Delete failed");
       }
@@ -109,9 +92,10 @@ export default function AlbumView() {
 
   return (
     <main className="p-6">
-      <h1 className="text-2xl font-bold text-[var(--primary)] mb-4">
+      <h1 className="text-2xl font-bold text-[var(--primary)] mb-2">
         {albumName ? `Album: ${albumName}` : `Album #${albumId}`}
       </h1>
+      <p className="text-sm text-gray-600 mb-4">{photos.length} photos</p> {/* ✅ count */}
 
       {/* Upload Section */}
       <div className="flex flex-col gap-4 mb-6 items-start">

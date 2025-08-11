@@ -50,6 +50,7 @@ export default function Login() {
       console.error("Login error:", err);
       setError(err.message || "Network error");
     }
+
   };
 
   return (
@@ -94,3 +95,4 @@ export default function Login() {
     </main>
   );
 }
+

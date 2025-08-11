@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { BASE_URL, PHOTO_BASE_URL } from "../../utils/api";
 
 type Comment = {
@@ -18,6 +18,7 @@ type Photo = {
 
 export default function PhotoView() {
   const { albumId, photoId } = useParams();
+  const navigate = useNavigate();
   const [photo, setPhoto] = useState<Photo | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState("");
@@ -33,15 +34,9 @@ export default function PhotoView() {
 
         if (!res.ok) throw new Error(data?.msg || "Failed to load photos");
 
-        const matched = data.photos.find(
-          (p: Photo) => p.id.toString() === photoId
-        );
-
-        if (matched) {
-          setPhoto(matched);
-        } else {
-          throw new Error("Photo not found in album");
-        }
+        const matched = data.photos.find((p: Photo) => p.id.toString() === photoId);
+        if (matched) setPhoto(matched);
+        else throw new Error("Photo not found in album");
       } catch (err) {
         console.error("Photo fetch error:", err);
       }
@@ -53,11 +48,8 @@ export default function PhotoView() {
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = await res.json();
-        if (res.ok) {
-          setComments(data.comments);
-        } else {
-          console.error("Comment fetch failed:", data);
-        }
+        if (res.ok) setComments(data.comments);
+        else console.error("Comment fetch failed:", data);
       } catch (err) {
         console.error("Failed to load comments:", err);
       }
@@ -94,10 +86,36 @@ export default function PhotoView() {
     }
   };
 
+  const handleDeleteComment = async (commentId: number) => {
+    try {
+      const res = await fetch(`${BASE_URL}/photos/${photoId}/comments/${commentId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (res.ok) {
+        setComments((prev) => prev.filter((c) => c.id !== commentId));
+      } else {
+        const data = await res.json();
+        alert(data?.msg || "Failed to delete comment");
+      }
+    } catch (err) {
+      console.error("Delete comment error:", err);
+    }
+  };
+
   const shareUrl = `${window.location.origin}/shared/photo/${photoId}`;
 
   return (
     <main className="p-6 max-w-3xl mx-auto">
+      {/* Return Button */}
+      <button
+        onClick={() => navigate(`/albums/${albumId}`)}
+        className="mb-4 px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded shadow"
+      >
+        ← Back to Album
+      </button>
+
       {photo ? (
         <>
           <img
@@ -132,11 +150,23 @@ export default function PhotoView() {
             <h2 className="text-xl font-semibold text-[var(--primary)] mb-2">Comments</h2>
             <ul className="space-y-2 mb-4">
               {comments.map((c) => (
-                <li key={c.id} className="bg-white rounded px-4 py-2 shadow text-sm">
-                  <strong>{c.author}</strong>: {c.content}
-                  <div className="text-xs text-gray-500">
-                    {new Date(c.created_at).toLocaleString()}
+                <li
+                  key={c.id}
+                  className="bg-white rounded px-4 py-2 shadow text-sm flex items-start justify-between gap-3"
+                >
+                  <div>
+                    <strong>{c.author}</strong>: {c.content}
+                    <div className="text-xs text-gray-500">
+                      {new Date(c.created_at).toLocaleString()}
+                    </div>
                   </div>
+                  <button
+                    onClick={() => handleDeleteComment(c.id)}
+                    className="text-red-600 text-xs hover:underline"
+                    title="Delete comment"
+                  >
+                    Delete
+                  </button>
                 </li>
               ))}
             </ul>
