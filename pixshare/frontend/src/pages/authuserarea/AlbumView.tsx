@@ -26,33 +26,64 @@ export default function AlbumView() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
 
-  const token = localStorage.getItem("token") || "";
+  const getToken = () => {
+    const t = localStorage.getItem("token");
+    return t && t !== "undefined" ? t : null;
+  };
+
+  const noCache = (url: string) => `${url}${url.includes("?") ? "&" : "?"}_=${Date.now()}`;
+  const authHeaders = (): HeadersInit => {
+    const token = getToken();
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
+  const handleAuthError = (status: number) => {
+    if (status === 401 || status === 422) {
+      navigate("/login");
+      return true;
+    }
+    return false;
+  };
+  const ensureAuthed = () => {
+    if (!getToken()) {
+      navigate("/login");
+      return false;
+    }
+    return true;
+  };
 
   const fetchPhotos = async () => {
+    if (!ensureAuthed()) return;
     try {
-      const res = await fetch(`${BASE_URL}/albums/${albumId}/photos`, {
+      const res = await fetch(noCache(`${BASE_URL}/albums/${albumId}/photos`), {
         method: "GET",
-        headers: { Authorization: `Bearer ${token}` },
-        credentials: "include",
+        headers: authHeaders(),
+        cache: "no-store",
       });
-      if (!res.ok) throw new Error("Failed to load photos");
+      if (!res.ok) {
+        if (handleAuthError(res.status)) return;
+        throw new Error("Failed to load photos");
+      }
       const data = await res.json();
-      setPhotos(data.photos);
+      setPhotos(data.photos || []);
     } catch (err) {
       console.error("Failed to load photos:", err);
     }
   };
 
   const fetchAlbumName = async () => {
+    if (!ensureAuthed()) return;
     try {
-      const res = await fetch(`${BASE_URL}/albums/${albumId}`, {
+      const res = await fetch(noCache(`${BASE_URL}/albums/${albumId}`), {
         method: "GET",
-        headers: { Authorization: `Bearer ${token}` },
-        credentials: "include",
+        headers: authHeaders(),
+        cache: "no-store",
       });
-      if (!res.ok) throw new Error("Failed to load album name");
+      if (!res.ok) {
+        if (handleAuthError(res.status)) return;
+        throw new Error("Failed to load album name");
+      }
       const data = await res.json();
-      setAlbumName(data.name);
+      setAlbumName(data.name || "");
     } catch (err) {
       console.error("Failed to load album name:", err);
     }
@@ -60,7 +91,7 @@ export default function AlbumView() {
 
   // Handles both files and folder uploads
   const uploadFiles = async (files: File[]) => {
-    if (!files.length) return;
+    if (!files.length || !ensureAuthed()) return;
 
     const formData = new FormData();
     files.forEach((file) => formData.append("photos", file));
@@ -69,16 +100,16 @@ export default function AlbumView() {
       setUploading(true);
       const res = await fetch(`${BASE_URL}/albums/${albumId}/photos`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: authHeaders(),
         body: formData,
-        credentials: "include",
       });
       const data = await res.json();
-      if (res.ok) {
-        setPhotos((prev) => [...prev, ...data.photos]);
-      } else {
+      if (!res.ok) {
+        if (handleAuthError(res.status)) return;
         console.error("Upload failed:", data);
+        return;
       }
+      setPhotos((prev) => [...prev, ...(data.photos || [])]);
     } catch (err) {
       console.error("Upload failed:", err);
     } finally {
@@ -108,7 +139,6 @@ export default function AlbumView() {
     if (supportsDirectoryUpload()) {
       folderInputRef.current?.click();
     } else {
-      // Firefox (and some others) don’t support folder selection
       alert(
         "Folder upload isn’t supported by your browser. Please use Chrome/Edge or select multiple files instead."
       );
@@ -117,17 +147,18 @@ export default function AlbumView() {
   };
 
   const deletePhoto = async (id: number) => {
+    if (!ensureAuthed()) return;
     try {
       const res = await fetch(`${BASE_URL}/photos/${id}`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-        credentials: "include",
+        headers: authHeaders(),
       });
-      if (res.ok) {
-        setPhotos((prev) => prev.filter((p) => p.id !== id));
-      } else {
+      if (!res.ok) {
+        if (handleAuthError(res.status)) return;
         console.error("Delete failed");
+        return;
       }
+      setPhotos((prev) => prev.filter((p) => p.id !== id));
     } catch (err) {
       console.error("Delete failed:", err);
     }
@@ -135,18 +166,18 @@ export default function AlbumView() {
 
   // Generate album share token
   const generateAlbumShare = async () => {
+    if (!ensureAuthed()) return;
     try {
       const res = await fetch(`${BASE_URL}/share/album/${albumId}`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        credentials: "include",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ can_comment: false }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.msg || "Failed to create album share link");
+      if (!res.ok) {
+        if (handleAuthError(res.status)) return;
+        throw new Error(data?.msg || "Failed to create album share link");
+      }
       setShareToken(data.share.token);
       setCopied(false);
     } catch (e: any) {

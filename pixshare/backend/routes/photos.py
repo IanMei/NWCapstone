@@ -1,3 +1,4 @@
+# backend/routes/photos.py
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from werkzeug.utils import secure_filename
@@ -9,12 +10,10 @@ from extensions import db
 
 photos_bp = Blueprint("photos", __name__)
 
-# ✅ Uploads folder outside of backend and frontend
 BASE_UPLOAD_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../uploads"))
 UPLOAD_FOLDER = os.path.join(BASE_UPLOAD_DIR, "photos")
 
 def _uid():
-    """Coerce JWT identity to int when possible (you set identity as str)."""
     uid = get_jwt_identity()
     try:
         return int(uid)
@@ -22,7 +21,7 @@ def _uid():
         return uid
 
 @photos_bp.route("/albums/<int:album_id>/photos", methods=["GET"])
-@jwt_required()
+@jwt_required(locations=["headers"])
 def get_photos(album_id):
     user_id = _uid()
     album = Album.query.filter_by(id=album_id, user_id=user_id).first()
@@ -44,7 +43,7 @@ def get_photos(album_id):
     }), 200
 
 @photos_bp.route("/albums/<int:album_id>/photos", methods=["POST"])
-@jwt_required()
+@jwt_required(locations=["headers"])
 def upload_photos(album_id):
     user_id = _uid()
     album = Album.query.filter_by(id=album_id, user_id=user_id).first()
@@ -55,10 +54,9 @@ def upload_photos(album_id):
         return jsonify({"msg": "No file(s) provided"}), 400
 
     files = request.files.getlist("photos") or [request.files.get("photo")]
-    files = [f for f in files if f]  # remove None
+    files = [f for f in files if f]
 
     saved_photos = []
-
     for file in files:
         if not file or file.filename == "":
             continue
@@ -70,10 +68,8 @@ def upload_photos(album_id):
         filepath = os.path.join(folder_path, filename)
         file.save(filepath)
 
-        # ✅ Relative path from the /uploads folder
         rel_path = os.path.relpath(filepath, BASE_UPLOAD_DIR)
 
-        # ✅ Record file size in bytes
         try:
             size_bytes = os.path.getsize(filepath)
         except OSError:
@@ -104,7 +100,7 @@ def upload_photos(album_id):
     }), 201
 
 @photos_bp.route("/photos/<int:photo_id>", methods=["DELETE"])
-@jwt_required()
+@jwt_required(locations=["headers"])
 def delete_photo(photo_id):
     user_id = _uid()
     photo = Photo.query.filter_by(id=photo_id, user_id=user_id).first()

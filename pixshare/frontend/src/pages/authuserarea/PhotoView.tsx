@@ -15,19 +15,45 @@ export default function PhotoView() {
   const [copied, setCopied] = useState(false);
   const shareInputRef = useRef<HTMLInputElement>(null);
 
-  const token = localStorage.getItem("token") || "";
+  const getToken = () => {
+    const t = localStorage.getItem("token");
+    return t && t !== "undefined" ? t : null;
+  };
+  const noCache = (u: string) => `${u}${u.includes("?") ? "&" : "?"}_=${Date.now()}`;
+  const authHeaders = (): HeadersInit => {
+    const token = getToken();
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
+  const handleAuthError = (status: number) => {
+    if (status === 401 || status === 422) {
+      navigate("/login");
+      return true;
+    }
+    return false;
+  };
+  const ensureAuthed = () => {
+    if (!getToken()) {
+      navigate("/login");
+      return false;
+    }
+    return true;
+  };
 
   useEffect(() => {
     const fetchPhotoFromAlbum = async () => {
+      if (!ensureAuthed()) return;
       try {
-        const res = await fetch(`${BASE_URL}/albums/${albumId}/photos`, {
+        const res = await fetch(noCache(`${BASE_URL}/albums/${albumId}/photos`), {
           method: "GET",
-          headers: { Authorization: `Bearer ${token}` },
-          credentials: "include",
+          headers: authHeaders(),
+          cache: "no-store",
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data?.msg || "Failed to load photos");
-        const matched = data.photos.find((p: Photo) => p.id.toString() === photoId);
+        if (!res.ok) {
+          if (handleAuthError(res.status)) return;
+          throw new Error(data?.msg || "Failed to load photos");
+        }
+        const matched = (data.photos || []).find((p: Photo) => p.id.toString() === photoId);
         if (matched) setPhoto(matched);
         else throw new Error("Photo not found in album");
       } catch (err) {
@@ -36,14 +62,19 @@ export default function PhotoView() {
     };
 
     const fetchComments = async () => {
+      if (!ensureAuthed()) return;
       try {
-        const res = await fetch(`${BASE_URL}/photos/${photoId}/comments`, {
+        const res = await fetch(noCache(`${BASE_URL}/photos/${photoId}/comments`), {
           method: "GET",
-          headers: { Authorization: `Bearer ${token}` },
-          credentials: "include",
+          headers: authHeaders(),
+          cache: "no-store",
         });
+        if (!res.ok) {
+          if (handleAuthError(res.status)) return;
+          return;
+        }
         const data = await res.json();
-        if (res.ok) setComments(data.comments);
+        setComments(data.comments || []);
       } catch (err) {
         console.error("Failed to load comments:", err);
       }
@@ -51,39 +82,44 @@ export default function PhotoView() {
 
     fetchPhotoFromAlbum();
     fetchComments();
-  }, [albumId, photoId, token]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [albumId, photoId]);
 
   const handleCommentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newComment.trim()) return;
+    if (!newComment.trim() || !ensureAuthed()) return;
 
     try {
       const res = await fetch(`${BASE_URL}/photos/${photoId}/comments`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        credentials: "include",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ content: newComment }),
       });
       const data = await res.json();
-      if (res.ok) {
-        setComments((prev) => [...prev, data.comment]);
-        setNewComment("");
-      } else {
+      if (!res.ok) {
+        if (handleAuthError(res.status)) return;
         console.error("Comment post failed:", data);
+        return;
       }
+      setComments((prev) => [...prev, data.comment]);
+      setNewComment("");
     } catch (err) {
       console.error("Comment post error:", err);
     }
   };
 
   const handleDeleteComment = async (commentId: number) => {
+    if (!ensureAuthed()) return;
     try {
       const res = await fetch(`${BASE_URL}/photos/${photoId}/comments/${commentId}`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-        credentials: "include",
+        headers: authHeaders(),
       });
-    if (res.ok) setComments((prev) => prev.filter((c) => c.id !== commentId));
+      if (!res.ok) {
+        if (handleAuthError(res.status)) return;
+        return;
+      }
+      setComments((prev) => prev.filter((c) => c.id !== commentId));
     } catch (err) {
       console.error("Delete comment error:", err);
     }
@@ -91,15 +127,18 @@ export default function PhotoView() {
 
   // Generate a share token for this photo
   const generateShare = async () => {
+    if (!ensureAuthed()) return;
     try {
       const res = await fetch(`${BASE_URL}/share/photo/${photoId}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        credentials: "include",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({ can_comment: false }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.msg || "Failed to create share link");
+      if (!res.ok) {
+        if (handleAuthError(res.status)) return;
+        throw new Error(data?.msg || "Failed to create share link");
+      }
       setShareToken(data.share.token);
       setCopied(false);
     } catch (e) {
@@ -114,15 +153,12 @@ export default function PhotoView() {
     ? `${currentProtocol}//${currentHost}/shared/photo/${shareToken}`
     : "";
 
-  // Robust copy-to-clipboard (works on LAN/non-HTTPS)
   const copyShareUrl = async () => {
     if (!shareUrl) return;
-
     try {
       if (navigator.clipboard && window.isSecureContext) {
         await navigator.clipboard.writeText(shareUrl);
       } else {
-        // Fallback: select input (if present) or create a temporary textarea
         if (shareInputRef.current) {
           shareInputRef.current.focus();
           shareInputRef.current.select();
@@ -131,7 +167,6 @@ export default function PhotoView() {
         } else {
           const el = document.createElement("textarea");
           el.value = shareUrl;
-          // Avoid scrolling to bottom
           el.style.position = "fixed";
           el.style.top = "0";
           el.style.left = "0";

@@ -20,21 +20,11 @@ type Photo = {
   album_id?: number;  // we add this client-side so we can filter
 };
 
-const noCacheFetchInit = (headers: HeadersInit): RequestInit => ({
-  method: "GET",
-  headers: {
-    "Cache-Control": "no-cache",
-    Pragma: "no-cache",
-    ...headers,
-  },
-  credentials: "include",
-  cache: "no-store",
-});
+const noCache = (u: string) => `${u}${u.includes("?") ? "&" : "?"}_=${Date.now()}`;
 
 export default function EventView() {
   const { eventId } = useParams();
   const navigate = useNavigate();
-  const token = localStorage.getItem("token") || "";
 
   const [eventInfo, setEventInfo] = useState<EventDetails | null>(null);
   const [allAlbums, setAllAlbums] = useState<Album[]>([]);
@@ -52,8 +42,23 @@ export default function EventView() {
   const [copied, setCopied] = useState(false);
   const shareInputRef = useRef<HTMLInputElement>(null);
 
-  const requireAuth = () => {
-    if (!token || token === "undefined") {
+  const getToken = () => {
+    const t = localStorage.getItem("token");
+    return t && t !== "undefined" ? t : null;
+  };
+  const authHeaders = (): HeadersInit => {
+    const token = getToken();
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
+  const handleAuthError = (status: number) => {
+    if (status === 401 || status === 422) {
+      navigate("/login");
+      return true;
+    }
+    return false;
+  };
+  const ensureAuthed = () => {
+    if (!getToken()) {
       navigate("/login");
       return false;
     }
@@ -61,18 +66,24 @@ export default function EventView() {
   };
 
   const fetchEvent = async () => {
-    if (!eventId) {
-      setErrorMsg("Missing event id in the URL.");
+    if (!eventId || !ensureAuthed()) {
+      if (!eventId) setErrorMsg("Missing event id in the URL.");
       setLoading(false);
       return;
     }
     try {
-      const url = `${BASE_URL}/events/${eventId}?_=${Date.now()}`;
-      const res = await fetch(url, noCacheFetchInit({ Authorization: `Bearer ${token}` }));
-
-      if (res.status === 304) return;
+      const res = await fetch(noCache(`${BASE_URL}/events/${eventId}`), {
+        method: "GET",
+        headers: {
+          "Cache-Control": "no-cache",
+          Pragma: "no-cache",
+          ...authHeaders(),
+        },
+        cache: "no-store",
+      });
 
       if (!res.ok) {
+        if (handleAuthError(res.status)) return;
         let msg = `Failed to load event #${eventId}`;
         try {
           const data = await res.json();
@@ -83,24 +94,28 @@ export default function EventView() {
 
       const data = await res.json();
       setEventInfo(data.event);
-
-      // IMPORTANT: do NOT prefill share link from backend to avoid showing a stale/broken link.
-      // If you want to show an existing link later, you could add a "Load existing link" button.
-      // if (data?.event?.shareId) setShareToken(data.event.shareId);  <-- intentionally disabled
     } catch (err: any) {
       console.error("fetchEvent error:", err);
       setErrorMsg(err.message || "Failed to load event");
+    } finally {
+      setLoading(false);
     }
   };
 
   const fetchAllAlbums = async () => {
+    if (!ensureAuthed()) return;
     try {
-      const url = `${BASE_URL}/albums?_=${Date.now()}`;
-      const res = await fetch(url, noCacheFetchInit({ Authorization: `Bearer ${token}` }));
-
-      if (res.status === 304) return;
+      const res = await fetch(noCache(`${BASE_URL}/albums`), {
+        headers: {
+          "Cache-Control": "no-cache",
+          Pragma: "no-cache",
+          ...authHeaders(),
+        },
+        cache: "no-store",
+      });
 
       if (!res.ok) {
+        if (handleAuthError(res.status)) return;
         let msg = "Failed to load albums";
         try {
           const data = await res.json();
@@ -119,6 +134,7 @@ export default function EventView() {
 
   // Fetch photos for all albums inside this event
   const fetchEventPhotos = async (albums: Album[]) => {
+    if (!ensureAuthed()) return;
     if (!albums || albums.length === 0) {
       setEventPhotos([]);
       return;
@@ -127,10 +143,16 @@ export default function EventView() {
     try {
       const results = await Promise.all(
         albums.map(async (a) => {
-          const url = `${BASE_URL}/albums/${a.id}/photos?_=${Date.now()}`;
-          const res = await fetch(url, noCacheFetchInit({ Authorization: `Bearer ${token}` }));
+          const res = await fetch(noCache(`${BASE_URL}/albums/${a.id}/photos`), {
+            headers: {
+              "Cache-Control": "no-cache",
+              Pragma: "no-cache",
+              ...authHeaders(),
+            },
+            cache: "no-store",
+          });
           if (!res.ok) {
-            // If one album fails, log and continue the rest
+            if (handleAuthError(res.status)) return [] as Photo[];
             try {
               const data = await res.json();
               console.warn("Album photos fetch failed:", a.id, data?.msg || res.statusText);
@@ -159,13 +181,10 @@ export default function EventView() {
 
   // Initial load
   useEffect(() => {
-    if (!requireAuth()) return;
     setLoading(true);
     setErrorMsg("");
-
-    Promise.allSettled([fetchEvent(), fetchAllAlbums()]).finally(() => {
-      setLoading(false);
-    });
+    fetchEvent();
+    fetchAllAlbums();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId]);
 
@@ -195,20 +214,22 @@ export default function EventView() {
   };
 
   const addSelectedAlbums = async () => {
-    if (!eventId || selectedAlbumIds.length === 0) return;
+    if (!eventId || selectedAlbumIds.length === 0 || !ensureAuthed()) return;
     try {
       const res = await fetch(`${BASE_URL}/events/${eventId}/albums`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          ...authHeaders(),
         },
-        credentials: "include",
         body: JSON.stringify({ album_ids: selectedAlbumIds }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.msg || "Failed to add albums");
-      await fetchEvent();              // refresh event (and photos via effect)
+      if (!res.ok) {
+        if (handleAuthError(res.status)) return;
+        throw new Error(data?.msg || "Failed to add albums");
+      }
+      await fetchEvent(); // refresh
       setSelectedAlbumIds([]);
     } catch (err: any) {
       console.error("addSelectedAlbums error:", err);
@@ -217,22 +238,23 @@ export default function EventView() {
   };
 
   const removeAlbum = async (albumId: number) => {
-    if (!eventId) return;
+    if (!eventId || !ensureAuthed()) return;
     try {
       const res = await fetch(`${BASE_URL}/events/${eventId}/albums/${albumId}`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-        credentials: "include",
+        headers: authHeaders(),
       });
 
-      if (res.status === 304) {
-        await fetchEvent();
-        return;
+      if (!res.ok) {
+        if (res.status === 304) {
+          await fetchEvent();
+          return;
+        }
+        if (handleAuthError(res.status)) return;
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.msg || "Failed to remove album");
       }
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.msg || "Failed to remove album");
-      await fetchEvent();              // refresh event (and photos via effect)
+      await fetchEvent();
     } catch (err: any) {
       console.error("removeAlbum error:", err);
       alert(err.message || "Remove failed");
@@ -240,20 +262,22 @@ export default function EventView() {
   };
 
   const createEventShare = async () => {
-    if (!eventId) return;
+    if (!eventId || !ensureAuthed()) return;
     try {
       const res = await fetch(`${BASE_URL}/share/event/${eventId}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          ...authHeaders(),
         },
-        credentials: "include",
         body: JSON.stringify({ can_comment: false }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.msg || "Failed to create share link");
-      setShareToken(data.share.token); // now show the link
+      if (!res.ok) {
+        if (handleAuthError(res.status)) return;
+        throw new Error(data?.msg || "Failed to create share link");
+      }
+      setShareToken(data.share.token);
     } catch (e: any) {
       console.error("createEventShare error:", e);
       alert(e.message || "Share failed");

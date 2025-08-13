@@ -5,7 +5,7 @@ from sqlalchemy import select, delete, insert
 from extensions import db
 from models.event import Event
 from models.album import Album
-from models.event_albums import event_albums as EventAlbum  # can be a db.Table OR a mapped class
+from models.event_albums import event_albums as EventAlbum
 import secrets
 
 events_bp = Blueprint("events", __name__)
@@ -13,7 +13,6 @@ events_bp = Blueprint("events", __name__)
 def _new_share_id():
     return secrets.token_urlsafe(12)
 
-# ⬇️ Ensure we always use an int user_id
 def _uid():
     uid = get_jwt_identity()
     try:
@@ -21,15 +20,13 @@ def _uid():
     except (TypeError, ValueError):
         return uid
 
-# ---- Helpers to abstract over Table vs ORM class -----------------------------
 def _ea_cols():
-    if hasattr(EventAlbum, "c"):  # Table
+    if hasattr(EventAlbum, "c"):
         return EventAlbum.c.event_id, EventAlbum.c.album_id
-    # ORM class
     return EventAlbum.event_id, EventAlbum.album_id
 
 def _ea_insert_many(values):
-    if hasattr(EventAlbum, "c"):  # Table
+    if hasattr(EventAlbum, "c"):
         db.session.execute(insert(EventAlbum), values)
     else:
         objs = [EventAlbum(**v) for v in values]
@@ -37,7 +34,7 @@ def _ea_insert_many(values):
 
 def _ea_delete_pairs(event_id, album_id=None):
     ev_col, al_col = _ea_cols()
-    if hasattr(EventAlbum, "c"):  # Table
+    if hasattr(EventAlbum, "c"):
         cond = (ev_col == event_id)
         if album_id is not None:
             cond = cond & (al_col == album_id)
@@ -48,24 +45,17 @@ def _ea_delete_pairs(event_id, album_id=None):
             q = q.filter(al_col == album_id)
         q.delete(synchronize_session=False)
 
-# -----------------------------------------------------------------------------
-
-# GET /api/events  — list user’s events
 @events_bp.route("/events", methods=["GET"])
-@jwt_required()
+@jwt_required(locations=["headers"])
 def list_events():
     user_id = _uid()
     events = Event.query.filter_by(user_id=user_id).order_by(Event.created_at.desc()).all()
     return jsonify({
-        "events": [
-            {"id": e.id, "name": e.title, "shareId": e.share_id}
-            for e in events
-        ]
+        "events": [{"id": e.id, "name": e.title, "shareId": e.share_id} for e in events]
     }), 200
 
-# POST /api/events — create event
 @events_bp.route("/events", methods=["POST"])
-@jwt_required()
+@jwt_required(locations=["headers"])
 def create_event():
     user_id = _uid()
     data = request.get_json() or {}
@@ -82,9 +72,8 @@ def create_event():
     db.session.commit()
     return jsonify({"event": {"id": ev.id, "name": ev.title, "shareId": ev.share_id}}), 201
 
-# DELETE /api/events/:id — delete an event (and its album links)
 @events_bp.route("/events/<int:event_id>", methods=["DELETE"])
-@jwt_required()
+@jwt_required(locations=["headers"])
 def delete_event(event_id):
     user_id = _uid()
     ev = Event.query.filter_by(id=event_id, user_id=user_id).first()
@@ -96,9 +85,8 @@ def delete_event(event_id):
     db.session.commit()
     return jsonify({"msg": "Event deleted"}), 200
 
-# GET /api/events/:id — one event with its albums
 @events_bp.route("/events/<int:event_id>", methods=["GET"])
-@jwt_required()
+@jwt_required(locations=["headers"])
 def get_event(event_id):
     user_id = _uid()
     ev = Event.query.filter_by(id=event_id, user_id=user_id).first()
@@ -106,7 +94,6 @@ def get_event(event_id):
         return jsonify({"msg": "Event not found"}), 404
 
     ev_col, al_col = _ea_cols()
-
     rows = (
         db.session.execute(
             select(Album.id, Album.title)
@@ -128,9 +115,8 @@ def get_event(event_id):
         }
     }), 200
 
-# POST /api/events/:id/albums — add multiple albums to event
 @events_bp.route("/events/<int:event_id>/albums", methods=["POST"])
-@jwt_required()
+@jwt_required(locations=["headers"])
 def add_albums_to_event(event_id):
     user_id = _uid()
     ev = Event.query.filter_by(id=event_id, user_id=user_id).first()
@@ -160,9 +146,8 @@ def add_albums_to_event(event_id):
 
     return get_event(event_id)
 
-# DELETE /api/events/:id/albums/:album_id — unlink album from event
 @events_bp.route("/events/<int:event_id>/albums/<int:album_id>", methods=["DELETE"])
-@jwt_required()
+@jwt_required(locations=["headers"])
 def remove_album_from_event(event_id, album_id):
     user_id = _uid()
     ev = Event.query.filter_by(id=event_id, user_id=user_id).first()

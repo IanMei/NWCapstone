@@ -59,7 +59,7 @@ def is_valid_event_share(token: str, event_id: int) -> bool:
 
 # POST /api/share/album/:album_id
 @shares_bp.route("/share/album/<int:album_id>", methods=["POST"])
-@jwt_required()
+@jwt_required(locations=["headers"])
 def create_album_share(album_id):
     """Create a public link for an album."""
     user_id = get_jwt_identity()
@@ -86,7 +86,7 @@ def create_album_share(album_id):
 
 # POST /api/share/photo/:photo_id
 @shares_bp.route("/share/photo/<int:photo_id>", methods=["POST"])
-@jwt_required()
+@jwt_required(locations=["headers"])
 def create_photo_share(photo_id):
     """Create a public link for a single photo."""
     user_id = get_jwt_identity()
@@ -113,7 +113,7 @@ def create_photo_share(photo_id):
 
 # POST /api/share/event/:event_id
 @shares_bp.route("/share/event/<int:event_id>", methods=["POST"])
-@jwt_required()
+@jwt_required(locations=["headers"])
 def create_event_share(event_id):
     """
     Create a public link for an event. This token can later be used by
@@ -147,7 +147,7 @@ def create_event_share(event_id):
 
 # DELETE /api/share/:share_id
 @shares_bp.route("/share/<int:share_id>", methods=["DELETE"])
-@jwt_required()
+@jwt_required(locations=["headers"])
 def revoke_share(share_id):
     user_id = get_jwt_identity()
     s = Share.query.get_or_404(share_id)

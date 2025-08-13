@@ -46,7 +46,7 @@ app.register_blueprint(shares_bp, url_prefix="/api")
 app.register_blueprint(comments_bp, url_prefix="/api")
 
 @app.route("/uploads/<path:filename>")
-@jwt_required(optional=True, locations=["headers"])
+@jwt_required(optional=True, locations=["headers", "cookies"])
 def serve_uploads(filename):
     """
     Access rules:
