@@ -12,6 +12,8 @@ import PhotoView from "./pages/authuserarea/PhotoView";
 import Events from "./pages/authuserarea/Events";
 import Settings from "./pages/authuserarea/Settings";
 import Editor from "./pages/authuserarea/Editor";
+import SharedPhoto from "./pages/Shared/SharedPhoto";
+
 
 function App() {
   return (
@@ -22,6 +24,9 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+
+        {/*Shared*/}
+        <Route path="/shared/photo/:token" element={<SharedPhoto />} />
 
         {/* Authenticated */}
         <Route path="/dashboard" element={<Dashboard />} />
