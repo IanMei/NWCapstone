@@ -3,3 +3,5 @@ pixshare/uploads/.DS_Store
 /pixshare/uploads
 pixshare/.DS_Store
 .DS_Store
+pixshare/backend/instance/pixshare.db
+pixshare/backend/instance/pixshare.db
