@@ -6,6 +6,7 @@ from extensions import db
 from models.event import Event
 from models.album import Album
 from models.event_albums import event_albums as EventAlbum
+from routes.shares import can_contribute_event
 import secrets
 
 events_bp = Blueprint("events", __name__)
@@ -119,31 +120,50 @@ def get_event(event_id):
 @jwt_required(locations=["headers"])
 def add_albums_to_event(event_id):
     user_id = _uid()
-    ev = Event.query.filter_by(id=event_id, user_id=user_id).first()
+    # owner OR collaborator via share token
+    token = request.args.get("t", "").strip()  # <- accept token in query
+
+    ev = Event.query.filter_by(id=event_id).first()
     if not ev:
         return jsonify({"msg": "Event not found"}), 404
+
+    is_owner = str(ev.user_id) == str(user_id)
+    is_collab = can_contribute_event(token, ev.id)
+
+    if not (is_owner or is_collab):
+        return jsonify({"msg": "Not authorized for this event"}), 403
 
     data = request.get_json() or {}
     album_ids = data.get("album_ids") or []
     if not isinstance(album_ids, list) or not album_ids:
         return jsonify({"msg": "album_ids must be a non-empty list"}), 400
 
-    owned_ids = {a.id for a in Album.query.filter(Album.id.in_(album_ids), Album.user_id == user_id).all()}
+    # ✅ Only allow adding albums owned by the caller (never someone else's)
+    owned_ids = {
+        a.id for a in Album.query
+            .filter(Album.id.in_(album_ids), Album.user_id == user_id)
+            .all()
+    }
     if not owned_ids:
         return jsonify({"msg": "No valid albums to add"}), 400
 
     ev_col, al_col = _ea_cols()
+
     existing = {
         row[0]
         for row in db.session.execute(
             select(al_col).where(ev_col == ev.id, al_col.in_(owned_ids))
         ).all()
     }
-    to_add = [{"event_id": ev.id, "album_id": aid} for aid in owned_ids if aid not in existing]
+
+    to_add = [{"event_id": ev.id, "album_id": aid}
+              for aid in owned_ids if aid not in existing]
+
     if to_add:
         _ea_insert_many(to_add)
         db.session.commit()
 
+    # Return the updated event payload
     return get_event(event_id)
 
 @events_bp.route("/events/<int:event_id>/albums/<int:album_id>", methods=["DELETE"])

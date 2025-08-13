@@ -53,6 +53,13 @@ def is_valid_event_share(token: str, event_id: int) -> bool:
     s = Share.query.filter_by(token=token, event_id=event_id).first()
     return s is not None
 
+# Allow treating can_comment as "can_collaborate" for now
+def can_contribute_event(token: str, event_id: int) -> bool:
+    if not token:
+        return False
+    s = Share.query.filter_by(token=token, event_id=event_id, can_comment=True).first()
+    return s is not None
+
 # --------------------------------------------------------------------------
 # CREATE SHARES (owner-only)
 # --------------------------------------------------------------------------
