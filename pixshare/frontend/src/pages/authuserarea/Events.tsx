@@ -8,21 +8,40 @@ type EventItem = {
   shareId?: string | null;
 };
 
+const noCache = (url: string) => `${url}${url.includes("?") ? "&" : "?"}_=${Date.now()}`;
+
 export default function Events() {
   const [events, setEvents] = useState<EventItem[]>([]);
   const [eventName, setEventName] = useState("");
   const navigate = useNavigate();
+
   const token = localStorage.getItem("token") || "";
+  const headers: HeadersInit =
+    token && token !== "undefined" ? { Authorization: `Bearer ${token}` } : {};
+
+  const handleAuthError = (status: number) => {
+    if (status === 401 || status === 422) {
+      navigate("/login");
+      return true;
+    }
+    return false;
+  };
 
   const fetchEvents = async () => {
     try {
-      const res = await fetch(`${BASE_URL}/events`, {
-        headers: { Authorization: `Bearer ${token}` },
-        credentials: "include",
+      const res = await fetch(noCache(`${BASE_URL}/events`), {
+        headers,
+        credentials: "omit",
+        cache: "no-store",
       });
+      if (!res.ok) {
+        if (handleAuthError(res.status)) return;
+        let msg = "Failed to fetch events";
+        try { const j = await res.json(); msg = j?.msg || msg; } catch {}
+        throw new Error(msg);
+      }
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.msg || "Failed to fetch events");
-      setEvents(data.events);
+      setEvents(data.events || []);
     } catch (err) {
       console.error("Failed to fetch events", err);
     }
@@ -33,11 +52,9 @@ export default function Events() {
     try {
       const res = await fetch(`${BASE_URL}/events`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        credentials: "include",
+        headers: { "Content-Type": "application/json", ...headers },
+        credentials: "omit",
+        cache: "no-store",
         body: JSON.stringify({ name: eventName }),
       });
       const data = await res.json();
@@ -45,6 +62,7 @@ export default function Events() {
         setEvents((prev) => [...prev, data.event]);
         setEventName("");
       } else {
+        if (handleAuthError(res.status)) return;
         throw new Error(data?.msg || "Create failed");
       }
     } catch (err) {
@@ -57,10 +75,8 @@ export default function Events() {
     const url = `${window.location.origin}/shared/event/${shareId}`;
     try {
       await navigator.clipboard.writeText(url);
-      // Optional: toast/alert
-      // alert("Share link copied!");
     } catch {
-      // fallback
+      // Fallback
       const ta = document.createElement("textarea");
       ta.value = url;
       ta.style.position = "fixed";
@@ -69,11 +85,14 @@ export default function Events() {
       ta.select();
       document.execCommand("copy");
       document.body.removeChild(ta);
-      // alert("Share link copied!");
     }
   };
 
   useEffect(() => {
+    if (!token || token === "undefined") {
+      navigate("/login");
+      return;
+    }
     fetchEvents();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -104,7 +123,6 @@ export default function Events() {
         {events.map((event) => (
           <li key={event.id} className="bg-white p-4 rounded shadow">
             <div className="flex items-center justify-between gap-3">
-              {/* Clickable title -> event details page */}
               <button
                 onClick={() => navigate(`/events/${event.id}`)}
                 className="text-left text-lg font-semibold text-[var(--secondary)] hover:underline"

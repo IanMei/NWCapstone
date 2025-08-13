@@ -1,22 +1,19 @@
+# backend/routes/photos.py
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from werkzeug.utils import secure_filename
 import os
 
 from models.photo import Photo
-from models.comment import Comment
-from models.user import User
 from models.album import Album
 from extensions import db
 
 photos_bp = Blueprint("photos", __name__)
 
-# ✅ Uploads folder outside of backend and frontend
 BASE_UPLOAD_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../uploads"))
 UPLOAD_FOLDER = os.path.join(BASE_UPLOAD_DIR, "photos")
 
 def _uid():
-    """Coerce JWT identity to int when possible (you set identity as str)."""
     uid = get_jwt_identity()
     try:
         return int(uid)
@@ -24,7 +21,7 @@ def _uid():
         return uid
 
 @photos_bp.route("/albums/<int:album_id>/photos", methods=["GET"])
-@jwt_required()
+@jwt_required(locations=["headers"])
 def get_photos(album_id):
     user_id = _uid()
     album = Album.query.filter_by(id=album_id, user_id=user_id).first()
@@ -46,7 +43,7 @@ def get_photos(album_id):
     }), 200
 
 @photos_bp.route("/albums/<int:album_id>/photos", methods=["POST"])
-@jwt_required()
+@jwt_required(locations=["headers"])
 def upload_photos(album_id):
     user_id = _uid()
     album = Album.query.filter_by(id=album_id, user_id=user_id).first()
@@ -57,10 +54,9 @@ def upload_photos(album_id):
         return jsonify({"msg": "No file(s) provided"}), 400
 
     files = request.files.getlist("photos") or [request.files.get("photo")]
-    files = [f for f in files if f]  # remove None
+    files = [f for f in files if f]
 
     saved_photos = []
-
     for file in files:
         if not file or file.filename == "":
             continue
@@ -72,10 +68,8 @@ def upload_photos(album_id):
         filepath = os.path.join(folder_path, filename)
         file.save(filepath)
 
-        # ✅ Relative path from the /uploads folder
         rel_path = os.path.relpath(filepath, BASE_UPLOAD_DIR)
 
-        # ✅ Record file size in bytes
         try:
             size_bytes = os.path.getsize(filepath)
         except OSError:
@@ -106,7 +100,7 @@ def upload_photos(album_id):
     }), 201
 
 @photos_bp.route("/photos/<int:photo_id>", methods=["DELETE"])
-@jwt_required()
+@jwt_required(locations=["headers"])
 def delete_photo(photo_id):
     user_id = _uid()
     photo = Photo.query.filter_by(id=photo_id, user_id=user_id).first()
@@ -123,74 +117,3 @@ def delete_photo(photo_id):
     db.session.delete(photo)
     db.session.commit()
     return jsonify({"msg": "Photo deleted"}), 200
-
-@photos_bp.route("/photos/<int:photo_id>/comments", methods=["GET"])
-@jwt_required()
-def get_photo_comments(photo_id):
-    photo = Photo.query.get_or_404(photo_id)
-
-    comments = Comment.query.filter_by(photo_id=photo.id).order_by(Comment.created_at.asc()).all()
-
-    result = [
-        {
-            "id": c.id,
-            "content": c.content,
-            "author": c.user.full_name if c.user else "Unknown",
-            "created_at": c.created_at.isoformat()
-        }
-        for c in comments
-    ]
-
-    return jsonify({"comments": result}), 200
-
-@photos_bp.route("/photos/<int:photo_id>/comments", methods=["POST"])
-@jwt_required()
-def post_comment(photo_id):
-    user_id = _uid()
-    data = request.get_json() or {}
-
-    content = (data.get("content") or "").strip()
-    if not content:
-        return jsonify({"msg": "Content is required"}), 400
-
-    photo = Photo.query.get(photo_id)
-    if not photo:
-        return jsonify({"msg": "Photo not found"}), 404
-
-    user = User.query.get(user_id)
-
-    comment = Comment(
-        content=content,
-        user_id=user_id,
-        photo_id=photo.id
-    )
-    db.session.add(comment)
-    db.session.commit()
-
-    return jsonify({
-        "comment": {
-            "id": comment.id,
-            "content": comment.content,
-            "author": user.full_name if user else "Unknown",
-            "created_at": comment.created_at.isoformat()
-        }
-    }), 201
-
-@photos_bp.route("/photos/<int:photo_id>/comments/<int:comment_id>", methods=["DELETE"])
-@jwt_required()
-def delete_photo_comment(photo_id, comment_id):
-    """Delete a specific comment on a photo. Only the author can delete."""
-    user_id = _uid()
-
-    # Ensure the comment exists and belongs to this photo
-    comment = Comment.query.filter_by(id=comment_id, photo_id=photo_id).first()
-    if not comment:
-        return jsonify({"msg": "Comment not found"}), 404
-
-    # Authorization: only the author can delete their comment
-    if str(comment.user_id) != str(user_id):
-        return jsonify({"msg": "Not authorized to delete this comment"}), 403
-
-    db.session.delete(comment)
-    db.session.commit()
-    return jsonify({"msg": "Comment deleted", "id": comment_id}), 200

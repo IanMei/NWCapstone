@@ -5,8 +5,10 @@ import { BASE_URL } from "../../utils/api";
 type Album = {
   id: number;
   name: string;
-  photo_count?: number; // ✅ added
+  photo_count?: number;
 };
+
+const noCache = (url: string) => `${url}${url.includes("?") ? "&" : "?"}_=${Date.now()}`;
 
 export default function Albums() {
   const [albums, setAlbums] = useState<Album[]>([]);
@@ -18,14 +20,29 @@ export default function Albums() {
     return token && token !== "undefined" ? token : null;
   };
 
+  const handleAuthError = (status: number) => {
+    if (status === 401 || status === 422) {
+      navigate("/login");
+      return true;
+    }
+    return false;
+  };
+
   const fetchAlbums = async (token: string) => {
     try {
-      const res = await fetch(`${BASE_URL}/albums`, {
+      const res = await fetch(noCache(`${BASE_URL}/albums`), {
         headers: { Authorization: `Bearer ${token}` },
+        credentials: "omit",
+        cache: "no-store",
       });
+      if (!res.ok) {
+        if (handleAuthError(res.status)) return;
+        let msg = "Failed to fetch albums";
+        try { const j = await res.json(); msg = j?.msg || msg; } catch {}
+        throw new Error(msg);
+      }
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.msg || "Failed to fetch albums");
-      setAlbums(data.albums);
+      setAlbums(data.albums || []);
     } catch (err) {
       console.error("Failed to fetch albums:", err);
     }
@@ -41,13 +58,16 @@ export default function Albums() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
+        credentials: "omit",
+        cache: "no-store",
         body: JSON.stringify({ name: newAlbumName }),
       });
       const data = await res.json();
       if (res.ok) {
-        setAlbums((prev) => [...prev, { ...data.album, photo_count: 0 }]); // ✅ start at 0
+        setAlbums((prev) => [...prev, { ...data.album, photo_count: 0 }]);
         setNewAlbumName("");
       } else {
+        if (handleAuthError(res.status)) return;
         throw new Error(data?.msg || "Failed to create album");
       }
     } catch (err) {
@@ -62,9 +82,12 @@ export default function Albums() {
       const res = await fetch(`${BASE_URL}/albums/${id}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
+        credentials: "omit",
+        cache: "no-store",
       });
       if (!res.ok) {
-        const data = await res.json();
+        if (handleAuthError(res.status)) return;
+        const data = await res.json().catch(() => ({}));
         throw new Error(data?.msg || "Failed to delete album");
       }
       setAlbums((prev) => prev.filter((a) => a.id !== id));

@@ -7,16 +7,18 @@ type Album = {
   name: string;
 };
 
+const noCache = (url: string) => `${url}${url.includes("?") ? "&" : "?"}_=${Date.now()}`;
+
 export default function Dashboard() {
   const [albums, setAlbums] = useState<Album[]>([]);
-  const [storageUsed, setStorageUsed] = useState<number>(0); // GB
-  const [storageLimit, setStorageLimit] = useState<number>(10); // GB (server returns 10 currently)
+  const [storageUsed, setStorageUsed] = useState<number>(0);
+  const [storageLimit, setStorageLimit] = useState<number>(10);
   const navigate = useNavigate();
 
   const token = localStorage.getItem("token");
-  const authHeader = {
-    Authorization: `Bearer ${token}`,
-  };
+  const authHeader: HeadersInit = token && token !== "undefined"
+    ? { Authorization: `Bearer ${token}` }
+    : {};
 
   const ensureAuthOrRedirect = () => {
     if (!token || token === "undefined") {
@@ -26,12 +28,29 @@ export default function Dashboard() {
     return true;
   };
 
+  const handleAuthError = (status: number) => {
+    if (status === 401 || status === 422) {
+      navigate("/login");
+      return true;
+    }
+    return false;
+  };
+
   const fetchAlbums = async () => {
     if (!ensureAuthOrRedirect()) return;
     try {
-      const res = await fetch(`${BASE_URL}/albums`, { headers: authHeader });
+      const res = await fetch(noCache(`${BASE_URL}/albums`), {
+        headers: authHeader,
+        credentials: "omit",
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        if (handleAuthError(res.status)) return;
+        let msg = "Failed to fetch albums";
+        try { const j = await res.json(); msg = j?.msg || msg; } catch {}
+        throw new Error(msg);
+      }
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.msg || "Failed to fetch albums");
       setAlbums(data.albums || []);
     } catch (err) {
       console.error("Failed to fetch dashboard albums:", err);
@@ -41,10 +60,18 @@ export default function Dashboard() {
   const fetchStorage = async () => {
     if (!ensureAuthOrRedirect()) return;
     try {
-      const res = await fetch(`${BASE_URL}/dashboard/storage`, { headers: authHeader });
+      const res = await fetch(noCache(`${BASE_URL}/dashboard/storage`), {
+        headers: authHeader,
+        credentials: "omit",
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        if (handleAuthError(res.status)) return;
+        let msg = "Failed to fetch storage";
+        try { const j = await res.json(); msg = j?.msg || msg; } catch {}
+        throw new Error(msg);
+      }
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.msg || "Failed to fetch storage");
-      // API returns { used_gb: number, limit_gb: number }
       setStorageUsed(Number(data.used_gb || 0));
       setStorageLimit(Number(data.limit_gb || 10));
     } catch (err) {
@@ -58,9 +85,8 @@ export default function Dashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const recentAlbums = albums.slice(-3).reverse(); // latest 3
-  const pct =
-    storageLimit > 0 ? Math.min(100, Math.round((storageUsed / storageLimit) * 100)) : 0;
+  const recentAlbums = albums.slice(-3).reverse();
+  const pct = storageLimit > 0 ? Math.min(100, Math.round((storageUsed / storageLimit) * 100)) : 0;
 
   return (
     <main className="p-6">

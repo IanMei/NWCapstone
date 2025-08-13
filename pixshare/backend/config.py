@@ -1,19 +1,28 @@
 import os
 from dotenv import load_dotenv
 
-load_dotenv()  # Load from .env
+load_dotenv()
 basedir = os.path.abspath(os.path.dirname(__file__))
 
 class Config:
-    SECRET_KEY = os.getenv("SECRET_KEY", "fallback-key")
-    SQLALCHEMY_DATABASE_URI = (
-        f"sqlite:///{os.path.join(basedir, 'instance', 'pixshare.db')}"
+    # Flask / SQLAlchemy
+    SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key")
+    SQLALCHEMY_DATABASE_URI = os.getenv(
+        "DATABASE_URL",
+        f"sqlite:///{os.path.join(basedir, 'instance', 'pixshare.db')}",
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    JWT_SECRET_KEY = "d4b275aa3b4b8c5f6f1c60f9a7d9ce93d97ad6e26e9b9a87c9a27d4ec366aa32"
-    UPLOAD_FOLDER = "uploads/photos/"
-    # JWT can be read from headers and cookies
+
+    # JWT
+    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-jwt-secret")
+
+    # ✅ Accept JWTs from both headers AND cookies
+    # - APIs will be decorated to read headers-only
+    # - /uploads will accept headers or cookies
+    # Allow both header + cookie, but we’ll scope the cookie to /uploads only
     JWT_TOKEN_LOCATION = ["headers", "cookies"]
-    JWT_COOKIE_SECURE = False        # True in production with HTTPS
-    JWT_COOKIE_SAMESITE = "Lax"      # or "Strict" if same-site only
-    JWT_COOKIE_CSRF_PROTECT = False  # keep simple for now; enable later if you want
+    JWT_ACCESS_COOKIE_PATH = "/uploads"  # <-- cookie only goes to /uploads, not /api
+    JWT_COOKIE_SAMESITE = "Lax"          # same-site so it’s sent to your proxied /uploads
+    JWT_COOKIE_SECURE = False            # dev over http
+    JWT_COOKIE_CSRF_PROTECT = False      # safe here since we’re scoping the cookie path
+

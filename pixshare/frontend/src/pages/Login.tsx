@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { BASE_URL } from "../utils/api"; // ✅ centralized API base (/api via Vite proxy)
+import { BASE_URL } from "../utils/api";
 
 export default function Login() {
   const [formData, setFormData] = useState({ email: "", password: "" });
@@ -9,7 +9,7 @@ export default function Login() {
   const navigate = useNavigate();
   const { login } = useAuth();
 
-  // 🧹 Clear any bad token on initial load
+  // Clean any bad/empty token on mount
   useEffect(() => {
     const current = localStorage.getItem("token");
     if (!current || current === "undefined") {
@@ -29,24 +29,25 @@ export default function Login() {
       const res = await fetch(`${BASE_URL}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include", // ✅ accept/set HttpOnly JWT cookie
+        // IMPORTANT: we are header-only, so don't send or set cookies
+        credentials: "include",  
+        cache: "no-store",
         body: JSON.stringify(formData),
       });
 
-      // Try to parse JSON safely (some network errors return empty body)
       let data: any = {};
       try {
         data = await res.json();
       } catch {
-        /* ignore parse error; we'll handle via res.ok */
+        /* ignore */
       }
 
       if (!res.ok) throw new Error(data?.msg || "Login failed");
 
       const token = data?.token;
       if (typeof token === "string" && token !== "undefined" && token.length > 0) {
-        localStorage.setItem("token", token); // used for Authorization header on API calls
-        login(token);                          // update context
+        localStorage.setItem("token", token); // for Authorization headers
+        login(token);
         navigate("/dashboard");
       } else {
         throw new Error("Invalid token received from server");

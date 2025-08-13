@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { BASE_URL } from "../utils/api"; // ✅ centralized API base URL
 
-// handle 用户申请
+// handle user register logic
 const Register = () => {
   const [formData, setFormData] = useState({
     name: "",
@@ -41,7 +41,7 @@ const Register = () => {
     }
   };
 
-  // handle 渲染
+  // handle page render
   return (
     <div className="flex items-center justify-center min-h-screen bg-[var(--bg-light)] text-[var(--primary)]">
       <form
