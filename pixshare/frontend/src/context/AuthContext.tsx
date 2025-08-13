@@ -1,3 +1,4 @@
+// src/context/AuthContext.tsx
 import { createContext, useContext, useEffect, useState } from "react";
 
 type AuthContextType = {
@@ -8,32 +9,23 @@ type AuthContextType = {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Flask-JWT-Extended default cookie name for access tokens
-const ACCESS_COOKIE_NAME = "access_token_cookie";
-
-function hasJwtCookie(): boolean {
-  // Simple cookie presence check (not validating token)
-  return typeof document !== "undefined" && document.cookie.includes(`${ACCESS_COOKIE_NAME}=`);
-}
-
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // On mount: check localStorage token OR JWT cookie set by backend
+  // On mount: trust only the token in localStorage
   useEffect(() => {
     const token = localStorage.getItem("token");
-    const authed = (!!token && token !== "undefined") || hasJwtCookie();
-    setIsAuthenticated(authed);
+    setIsAuthenticated(!!token && token !== "undefined");
     setLoading(false);
   }, []);
 
-  // Keep auth state in sync across tabs/windows
+  // Keep auth state in sync across tabs/windows (still header-only)
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
       if (e.key === "token") {
         const token = localStorage.getItem("token");
-        setIsAuthenticated((!!token && token !== "undefined") || hasJwtCookie());
+        setIsAuthenticated(!!token && token !== "undefined");
       }
     };
     window.addEventListener("storage", onStorage);
@@ -43,21 +35,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   // Called when user logs in successfully
   const login = (token: string) => {
     if (token && token !== "undefined") {
-      localStorage.setItem("token", token); // header-based API calls
-      // The server also set an HttpOnly cookie for same-origin image requests
+      localStorage.setItem("token", token); // used by your fetch helpers
       setIsAuthenticated(true);
     } else {
       console.warn("Invalid token passed to login()");
     }
   };
 
-  // Called when user logs out — clears cookie on server and local token
+  // Called when user logs out — clear server cookie if any (safe), then local token
   const logout = async () => {
     try {
-      // Same-origin via Vite proxy, cookie will be included automatically
-      await fetch("/api/auth/logout", { method: "POST" });
+      // Optional: clear any old cookie on server; harmless if cookies are disabled
+      await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
     } catch (err) {
-      // Non-fatal; we'll still clear client state
       console.warn("Logout request failed; clearing client state anyway.", err);
     } finally {
       localStorage.removeItem("token");
@@ -65,7 +55,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
-  // Prevent app from rendering before auth check is done
   if (loading) return null;
 
   return (
@@ -75,7 +64,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   );
 };
 
-// Custom hook to access context safely
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) throw new Error("useAuth must be used within an AuthProvider");

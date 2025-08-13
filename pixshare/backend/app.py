@@ -16,6 +16,7 @@ from routes.albums import albums_bp
 from routes.photos import photos_bp
 from routes.events import events_bp
 from routes.shares import shares_bp
+from routes.comments import comments_bp
 
 app = Flask(__name__)
 # If using Vite proxy (same-origin), CORS is optional. Safe to leave on:
@@ -42,9 +43,10 @@ app.register_blueprint(albums_bp, url_prefix="/api")
 app.register_blueprint(photos_bp, url_prefix="/api")
 app.register_blueprint(events_bp, url_prefix="/api")
 app.register_blueprint(shares_bp, url_prefix="/api")
+app.register_blueprint(comments_bp, url_prefix="/api")
 
 @app.route("/uploads/<path:filename>")
-@jwt_required(optional=True, locations=["headers", "cookies"])
+@jwt_required(optional=True, locations=["headers"])
 def serve_uploads(filename):
     """
     Access rules:

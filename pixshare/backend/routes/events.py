@@ -13,23 +13,22 @@ events_bp = Blueprint("events", __name__)
 def _new_share_id():
     return secrets.token_urlsafe(12)
 
-# ---- Helpers to abstract over Table vs ORM class -----------------------------
+# ⬇️ Ensure we always use an int user_id
+def _uid():
+    uid = get_jwt_identity()
+    try:
+        return int(uid)
+    except (TypeError, ValueError):
+        return uid
 
+# ---- Helpers to abstract over Table vs ORM class -----------------------------
 def _ea_cols():
-    """
-    Return (event_id_col, album_id_col) that can be used in SQL expressions
-    whether EventAlbum is a Table (has .c) or a mapped class (has attributes).
-    """
     if hasattr(EventAlbum, "c"):  # Table
         return EventAlbum.c.event_id, EventAlbum.c.album_id
     # ORM class
     return EventAlbum.event_id, EventAlbum.album_id
 
 def _ea_insert_many(values):
-    """
-    Insert many link rows regardless of Table vs ORM class.
-    values is a list of dicts: {"event_id": ..., "album_id": ...}
-    """
     if hasattr(EventAlbum, "c"):  # Table
         db.session.execute(insert(EventAlbum), values)
     else:
@@ -37,7 +36,6 @@ def _ea_insert_many(values):
         db.session.bulk_save_objects(objs)
 
 def _ea_delete_pairs(event_id, album_id=None):
-    """Delete links. If album_id is None, delete all for the event."""
     ev_col, al_col = _ea_cols()
     if hasattr(EventAlbum, "c"):  # Table
         cond = (ev_col == event_id)
@@ -56,7 +54,7 @@ def _ea_delete_pairs(event_id, album_id=None):
 @events_bp.route("/events", methods=["GET"])
 @jwt_required()
 def list_events():
-    user_id = get_jwt_identity()
+    user_id = _uid()
     events = Event.query.filter_by(user_id=user_id).order_by(Event.created_at.desc()).all()
     return jsonify({
         "events": [
@@ -69,7 +67,7 @@ def list_events():
 @events_bp.route("/events", methods=["POST"])
 @jwt_required()
 def create_event():
-    user_id = get_jwt_identity()
+    user_id = _uid()
     data = request.get_json() or {}
     name = (data.get("name") or "").strip()
     if not name:
@@ -88,7 +86,7 @@ def create_event():
 @events_bp.route("/events/<int:event_id>", methods=["DELETE"])
 @jwt_required()
 def delete_event(event_id):
-    user_id = get_jwt_identity()
+    user_id = _uid()
     ev = Event.query.filter_by(id=event_id, user_id=user_id).first()
     if not ev:
         return jsonify({"msg": "Event not found"}), 404
@@ -102,7 +100,7 @@ def delete_event(event_id):
 @events_bp.route("/events/<int:event_id>", methods=["GET"])
 @jwt_required()
 def get_event(event_id):
-    user_id = get_jwt_identity()
+    user_id = _uid()
     ev = Event.query.filter_by(id=event_id, user_id=user_id).first()
     if not ev:
         return jsonify({"msg": "Event not found"}), 404
@@ -134,7 +132,7 @@ def get_event(event_id):
 @events_bp.route("/events/<int:event_id>/albums", methods=["POST"])
 @jwt_required()
 def add_albums_to_event(event_id):
-    user_id = get_jwt_identity()
+    user_id = _uid()
     ev = Event.query.filter_by(id=event_id, user_id=user_id).first()
     if not ev:
         return jsonify({"msg": "Event not found"}), 404
@@ -144,12 +142,10 @@ def add_albums_to_event(event_id):
     if not isinstance(album_ids, list) or not album_ids:
         return jsonify({"msg": "album_ids must be a non-empty list"}), 400
 
-    # keep only albums owned by user
     owned_ids = {a.id for a in Album.query.filter(Album.id.in_(album_ids), Album.user_id == user_id).all()}
     if not owned_ids:
         return jsonify({"msg": "No valid albums to add"}), 400
 
-    # find existing links to avoid duplicates
     ev_col, al_col = _ea_cols()
     existing = {
         row[0]
@@ -168,12 +164,11 @@ def add_albums_to_event(event_id):
 @events_bp.route("/events/<int:event_id>/albums/<int:album_id>", methods=["DELETE"])
 @jwt_required()
 def remove_album_from_event(event_id, album_id):
-    user_id = get_jwt_identity()
+    user_id = _uid()
     ev = Event.query.filter_by(id=event_id, user_id=user_id).first()
     if not ev:
         return jsonify({"msg": "Event not found"}), 404
 
-    # optional: verify ownership of the album
     if not Album.query.filter_by(id=album_id, user_id=user_id).first():
         return jsonify({"msg": "Album not found"}), 404
 

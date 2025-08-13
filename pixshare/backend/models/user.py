@@ -1,3 +1,4 @@
+# backend/models/user.py
 from extensions import db
 from datetime import datetime
 
@@ -11,4 +12,19 @@ class User(db.Model):
     albums = db.relationship("Album", backref="owner", lazy=True)
     events = db.relationship("Event", backref="creator", lazy=True)
     photos = db.relationship("Photo", backref="uploader", lazy=True)
-    comments = db.relationship("Comment", backref="author", lazy=True)
+
+    # Pair with Comment.user (make sure Comment.user uses back_populates="user")
+    comments = db.relationship(
+        "Comment",
+        back_populates="user",
+        lazy=True,
+        cascade="all, delete-orphan",
+    )
+
+    # Pair with PhotoReaction.user
+    photo_reactions = db.relationship(
+        "PhotoReaction",
+        back_populates="user",
+        lazy=True,
+        cascade="all, delete-orphan",
+    )

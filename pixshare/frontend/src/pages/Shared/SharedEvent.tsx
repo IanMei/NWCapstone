@@ -1,5 +1,5 @@
 // src/pages/Shared/SharedEvent.tsx
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { BASE_URL } from "../../utils/api";
 
@@ -47,64 +47,138 @@ export default function SharedEvent() {
   // album filter
   const [albumFilter, setAlbumFilter] = useState<number | "all">("all");
 
+  // collaboration UI
+  const [addingIds, setAddingIds] = useState<string>(""); // comma-separated IDs
+  const [saving, setSaving] = useState<boolean>(false);
+
   // share copy UI (optional)
   const [copied, setCopied] = useState(false);
   const shareInputRef = useRef<HTMLInputElement>(null);
 
   const IMG_BASE = BASE_URL.replace("/api", "");
 
+  const load = async () => {
+    if (!token) {
+      setErr("Missing share token");
+      setLoading(false);
+      return;
+    }
+    try {
+      setLoading(true);
+      setErr("");
+      const res = await noCacheFetch(`${BASE_URL}/s/${encodeURIComponent(token)}/event`);
+      if (!res.ok) {
+        let msg = "Failed to open shared event";
+        try {
+          const j = await res.json();
+          msg = j?.msg || msg;
+        } catch {}
+        throw new Error(msg);
+      }
+      const j = (await res.json()) as SharedEventResponse;
+      setData(j);
+    } catch (e: any) {
+      setErr(e?.message || "Error loading shared event");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    let alive = true;
-
-    (async () => {
-      if (!token) {
-        setErr("Missing share token");
-        setLoading(false);
-        return;
-      }
-
-      try {
-        setLoading(true);
-        setErr("");
-
-        const res = await noCacheFetch(
-          `${BASE_URL}/s/${encodeURIComponent(token)}/event`
-        );
-
-        if (!res.ok) {
-          let msg = "Failed to open shared event";
-          try {
-            const j = await res.json();
-            msg = j?.msg || msg;
-          } catch {}
-          throw new Error(msg);
-        }
-
-        const j = (await res.json()) as SharedEventResponse;
-        if (!alive) return;
-        setData(j);
-      } catch (e: any) {
-        if (!alive) return;
-        setErr(e?.message || "Error loading shared event");
-      } finally {
-        if (alive) setLoading(false);
-      }
-    })();
-
-    return () => {
-      alive = false;
-    };
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   const photos = useMemo<Photo[]>(() => {
     if (!data) return [];
-    const list =
-      (data as any).photos ||
-      (data as any).event?.photos ||
-      [];
+    const list = (data as any).photos || (data as any).event?.photos || [];
     if (albumFilter === "all") return list;
     return list.filter((p: Photo) => p.album_id === albumFilter);
   }, [data, albumFilter]);
+
+  // ---- Collaboration actions (via share_token) -----------------------------
+
+  const addAlbumsById = async () => {
+    if (!data || !token) return;
+    const eventId = data.event.id;
+
+    // Parse comma-separated IDs -> number[]
+    const ids = Array.from(
+      new Set(
+        addingIds
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .map((s) => Number(s))
+          .filter((n) => Number.isFinite(n) && n > 0)
+      )
+    );
+
+    if (ids.length === 0) {
+      alert("Please enter one or more album IDs (comma-separated).");
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const res = await fetch(
+        `${BASE_URL}/events/${eventId}/albums?share_token=${encodeURIComponent(token)}`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": "no-cache",
+            Pragma: "no-cache",
+          },
+          body: JSON.stringify({ album_ids: ids }),
+        }
+      );
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(j?.msg || "Failed to add albums");
+      }
+      // Re-load the shared payload to reflect new albums + photos
+      await load();
+      setAddingIds("");
+    } catch (e: any) {
+      alert(e?.message || "Add failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const removeAlbum = async (albumId: number) => {
+    if (!data || !token) return;
+    const eventId = data.event.id;
+    if (!confirm("Remove this album from the event?")) return;
+
+    try {
+      setSaving(true);
+      const res = await fetch(
+        `${BASE_URL}/events/${eventId}/albums/${albumId}?share_token=${encodeURIComponent(
+          token
+        )}`,
+        {
+          method: "DELETE",
+          credentials: "include",
+          headers: {
+            "Cache-Control": "no-cache",
+            Pragma: "no-cache",
+          },
+        }
+      );
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j?.msg || "Failed to remove album");
+      await load();
+    } catch (e: any) {
+      alert(e?.message || "Remove failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // -------------------------------------------------------------------------
 
   if (loading) {
     return (
@@ -128,26 +202,15 @@ export default function SharedEvent() {
   const { event, albums } = data;
   const total = photos.length;
 
-//   const publicShareUrl = `${window.location.protocol}//${window.location.host}/shared/event/${token}`;
-
-//   const copyShareUrl = async () => {
-//     try {
-//       if (navigator.clipboard && window.isSecureContext) {
-//         await navigator.clipboard.writeText(publicShareUrl);
-//       } else {
-//         if (shareInputRef.current) {
-//           shareInputRef.current.focus();
-//           shareInputRef.current.select();
-//           document.execCommand("copy");
-//           window.getSelection()?.removeAllRanges();
-//         }
-//       }
-//       setCopied(true);
-//       setTimeout(() => setCopied(false), 1200);
-//     } catch {
-//       // ignore
-//     }
-//   };
+  // Optional copy UI; enable if you want a quick “copy link” on public page.
+  // const publicShareUrl = `${window.location.protocol}//${window.location.host}/shared/event/${token}`;
+  // const copyShareUrl = async () => {
+  //   try {
+  //     await navigator.clipboard.writeText(publicShareUrl);
+  //     setCopied(true);
+  //     setTimeout(() => setCopied(false), 1200);
+  //   } catch {}
+  // };
 
   return (
     <main className="p-6 max-w-6xl mx-auto">
@@ -187,10 +250,58 @@ export default function SharedEvent() {
         </div> */}
       </div>
 
+      {/* Collaboration: manage albums with share_token */}
+      <section className="mb-6 bg-white rounded shadow p-4">
+        <h2 className="text-lg font-semibold mb-3">Manage Albums in this Event</h2>
+
+        {/* Existing albums (with remove) */}
+        {albums.length === 0 ? (
+          <p className="text-sm text-gray-500">No albums added yet.</p>
+        ) : (
+          <ul className="divide-y mb-4">
+            {albums.map((a) => (
+              <li key={a.id} className="py-2 flex items-center justify-between">
+                <span className="text-[var(--secondary)]">{a.name}</span>
+                <button
+                  onClick={() => removeAlbum(a.id)}
+                  className="text-sm text-red-600 hover:underline disabled:opacity-50"
+                  disabled={saving}
+                >
+                  Remove
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {/* Add by ID(s) for now (until we expose an owner’s album list to collaborators) */}
+        <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
+          <label className="text-sm text-gray-600">Add albums by ID:</label>
+          <input
+            type="text"
+            value={addingIds}
+            onChange={(e) => setAddingIds(e.target.value)}
+            placeholder="e.g. 3, 5, 9"
+            className="px-3 py-2 border rounded w-72"
+          />
+          <button
+            onClick={addAlbumsById}
+            disabled={saving || addingIds.trim().length === 0}
+            className="bg-[var(--accent)] hover:bg-[var(--accent-dark)] text-white px-4 py-2 rounded disabled:opacity-60"
+          >
+            {saving ? "Saving…" : "Add"}
+          </button>
+        </div>
+
+        <p className="mt-2 text-xs text-gray-500">
+          Tip: album IDs belong to the event owner’s library. A nicer picker is coming soon.
+        </p>
+      </section>
+
       {/* Album filter */}
       {albums.length > 0 && (
         <div className="mb-4 flex items-center gap-2">
-          <label className="text-sm text-gray-600">Filter by album:</label>
+          <label className="text-sm text-gray-600">Filter photos by album:</label>
           <select
             className="border rounded px-2 py-1 text-sm"
             value={albumFilter}
@@ -219,9 +330,8 @@ export default function SharedEvent() {
               className="border rounded overflow-hidden shadow bg-white"
             >
               <img
-                src={`${IMG_BASE}/uploads/${p.filepath}?t=${encodeURIComponent(
-                  token!
-                )}`}
+                // Important: pass the share token so /uploads authorizes the file
+                src={`${IMG_BASE}/uploads/${p.filepath}?t=${encodeURIComponent(token!)}`}
                 alt={p.filename}
                 className="w-full h-44 object-cover"
                 loading="lazy"
