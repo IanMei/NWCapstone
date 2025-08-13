@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { BASE_URL, PHOTO_BASE_URL } from "../../utils/api";
 
-type Comment = { id: number; content: string; author: string; created_at: string; };
-type Photo = { id: number; filename: string; filepath: string; uploaded_at: string; };
+type Comment = { id: number; content: string; author: string; created_at: string };
+type Photo = { id: number; filename: string; filepath: string; uploaded_at: string };
 
 export default function PhotoView() {
   const { albumId, photoId } = useParams();
@@ -11,7 +11,10 @@ export default function PhotoView() {
   const [photo, setPhoto] = useState<Photo | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState("");
-  const [shareToken, setShareToken] = useState<string>("");   // 👈 new
+  const [shareToken, setShareToken] = useState<string>("");
+  const [copied, setCopied] = useState(false);
+  const shareInputRef = useRef<HTMLInputElement>(null);
+
   const token = localStorage.getItem("token") || "";
 
   useEffect(() => {
@@ -27,7 +30,9 @@ export default function PhotoView() {
         const matched = data.photos.find((p: Photo) => p.id.toString() === photoId);
         if (matched) setPhoto(matched);
         else throw new Error("Photo not found in album");
-      } catch (err) { console.error("Photo fetch error:", err); }
+      } catch (err) {
+        console.error("Photo fetch error:", err);
+      }
     };
 
     const fetchComments = async () => {
@@ -39,7 +44,9 @@ export default function PhotoView() {
         });
         const data = await res.json();
         if (res.ok) setComments(data.comments);
-      } catch (err) { console.error("Failed to load comments:", err); }
+      } catch (err) {
+        console.error("Failed to load comments:", err);
+      }
     };
 
     fetchPhotoFromAlbum();
@@ -49,6 +56,7 @@ export default function PhotoView() {
   const handleCommentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newComment.trim()) return;
+
     try {
       const res = await fetch(`${BASE_URL}/photos/${photoId}/comments`, {
         method: "POST",
@@ -57,8 +65,15 @@ export default function PhotoView() {
         body: JSON.stringify({ content: newComment }),
       });
       const data = await res.json();
-      if (res.ok) { setComments((prev) => [...prev, data.comment]); setNewComment(""); }
-    } catch (err) { console.error("Comment post error:", err); }
+      if (res.ok) {
+        setComments((prev) => [...prev, data.comment]);
+        setNewComment("");
+      } else {
+        console.error("Comment post failed:", data);
+      }
+    } catch (err) {
+      console.error("Comment post error:", err);
+    }
   };
 
   const handleDeleteComment = async (commentId: number) => {
@@ -68,11 +83,13 @@ export default function PhotoView() {
         headers: { Authorization: `Bearer ${token}` },
         credentials: "include",
       });
-      if (res.ok) setComments((prev) => prev.filter((c) => c.id !== commentId));
-    } catch (err) { console.error("Delete comment error:", err); }
+    if (res.ok) setComments((prev) => prev.filter((c) => c.id !== commentId));
+    } catch (err) {
+      console.error("Delete comment error:", err);
+    }
   };
 
-  // 👉 Generate share token on demand
+  // Generate a share token for this photo
   const generateShare = async () => {
     try {
       const res = await fetch(`${BASE_URL}/share/photo/${photoId}`, {
@@ -83,7 +100,8 @@ export default function PhotoView() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.msg || "Failed to create share link");
-      setShareToken(data.share.token); // store token
+      setShareToken(data.share.token);
+      setCopied(false);
     } catch (e) {
       console.error(e);
       alert((e as Error).message);
@@ -95,6 +113,43 @@ export default function PhotoView() {
   const shareUrl = shareToken
     ? `${currentProtocol}//${currentHost}/shared/photo/${shareToken}`
     : "";
+
+  // Robust copy-to-clipboard (works on LAN/non-HTTPS)
+  const copyShareUrl = async () => {
+    if (!shareUrl) return;
+
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(shareUrl);
+      } else {
+        // Fallback: select input (if present) or create a temporary textarea
+        if (shareInputRef.current) {
+          shareInputRef.current.focus();
+          shareInputRef.current.select();
+          document.execCommand("copy");
+          window.getSelection()?.removeAllRanges();
+        } else {
+          const el = document.createElement("textarea");
+          el.value = shareUrl;
+          // Avoid scrolling to bottom
+          el.style.position = "fixed";
+          el.style.top = "0";
+          el.style.left = "0";
+          el.style.opacity = "0";
+          document.body.appendChild(el);
+          el.focus();
+          el.select();
+          document.execCommand("copy");
+          document.body.removeChild(el);
+        }
+      }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch (err) {
+      console.error("Clipboard copy failed:", err);
+      alert("Could not copy. Please copy it manually.");
+    }
+  };
 
   return (
     <main className="p-6 max-w-3xl mx-auto">
@@ -122,21 +177,24 @@ export default function PhotoView() {
               onClick={generateShare}
               className="bg-[var(--accent)] hover:bg-[var(--accent-dark)] text-white px-3 py-2 rounded"
             >
-              Generate Share Link
+              {shareToken ? "Regenerate Share Link" : "Generate Share Link"}
             </button>
 
             {shareUrl && (
-              <div className="flex">
+              <div className="flex items-stretch">
                 <input
+                  ref={shareInputRef}
                   readOnly
                   value={shareUrl}
+                  onFocus={(e) => e.currentTarget.select()}
                   className="flex-1 px-2 py-1 border rounded-l text-sm"
                 />
                 <button
-                  onClick={() => navigator.clipboard.writeText(shareUrl)}
+                  onClick={copyShareUrl}
                   className="bg-[var(--accent)] hover:bg-[var(--accent-dark)] text-white px-3 rounded-r"
+                  title="Copy share link"
                 >
-                  Copy
+                  {copied ? "Copied!" : "Copy"}
                 </button>
               </div>
             )}
@@ -147,7 +205,10 @@ export default function PhotoView() {
             <h2 className="text-xl font-semibold text-[var(--primary)] mb-2">Comments</h2>
             <ul className="space-y-2 mb-4">
               {comments.map((c) => (
-                <li key={c.id} className="bg-white rounded px-4 py-2 shadow text-sm flex items-start justify-between gap-3">
+                <li
+                  key={c.id}
+                  className="bg-white rounded px-4 py-2 shadow text-sm flex items-start justify-between gap-3"
+                >
                   <div>
                     <strong>{c.author}</strong>: {c.content}
                     <div className="text-xs text-gray-500">
@@ -157,6 +218,7 @@ export default function PhotoView() {
                   <button
                     onClick={() => handleDeleteComment(c.id)}
                     className="text-red-600 text-xs hover:underline"
+                    title="Delete comment"
                   >
                     Delete
                   </button>
