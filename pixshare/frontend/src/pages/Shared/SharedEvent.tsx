@@ -128,7 +128,7 @@ export default function SharedEvent() {
   const { event, albums } = data;
   const total = photos.length;
 
-  const publicShareUrl = `${window.location.protocol}//${window.location.host}/shared/event/${token}`;
+//   const publicShareUrl = `${window.location.protocol}//${window.location.host}/shared/event/${token}`;
 
 //   const copyShareUrl = async () => {
 //     try {

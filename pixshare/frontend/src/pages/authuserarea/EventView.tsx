@@ -9,7 +9,7 @@ type EventDetails = {
   description?: string | null;
   date?: string | null;
   albums: Album[];
-  shareId?: string | null;
+  shareId?: string | null; // ignored for initial UI to avoid stale link
 };
 
 type Photo = {
@@ -47,7 +47,7 @@ export default function EventView() {
   const [photosLoading, setPhotosLoading] = useState<boolean>(false);
   const [albumFilter, setAlbumFilter] = useState<number | "all">("all");
 
-  // share UI
+  // share UI — start EMPTY so user must click to generate
   const [shareToken, setShareToken] = useState<string>("");
   const [copied, setCopied] = useState(false);
   const shareInputRef = useRef<HTMLInputElement>(null);
@@ -83,7 +83,10 @@ export default function EventView() {
 
       const data = await res.json();
       setEventInfo(data.event);
-      if (data?.event?.shareId) setShareToken(data.event.shareId);
+
+      // IMPORTANT: do NOT prefill share link from backend to avoid showing a stale/broken link.
+      // If you want to show an existing link later, you could add a "Load existing link" button.
+      // if (data?.event?.shareId) setShareToken(data.event.shareId);  <-- intentionally disabled
     } catch (err: any) {
       console.error("fetchEvent error:", err);
       setErrorMsg(err.message || "Failed to load event");
@@ -250,7 +253,7 @@ export default function EventView() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.msg || "Failed to create share link");
-      setShareToken(data.share.token);
+      setShareToken(data.share.token); // now show the link
     } catch (e: any) {
       console.error("createEventShare error:", e);
       alert(e.message || "Share failed");
@@ -264,7 +267,7 @@ export default function EventView() {
   const copyShareUrl = async () => {
     if (!shareUrl) return;
     try {
-      if (navigator.clipboard && window.isSecureContext) {
+      if (navigator.clipboard && (window as any).isSecureContext) {
         await navigator.clipboard.writeText(shareUrl);
       } else {
         if (shareInputRef.current) {
@@ -361,13 +364,13 @@ export default function EventView() {
         </div>
       )}
 
-      {/* Share section (optional) */}
+      {/* Share section: starts as JUST a button; link appears only after generation */}
       <div className="mb-6 flex flex-col sm:flex-row sm:items-center gap-2">
         <button
           onClick={createEventShare}
           className="self-start bg-[var(--accent)] hover:bg-[var(--accent-dark)] text-white px-3 py-2 rounded"
         >
-          {shareToken ? "Regenerate Share Link" : "Share Event"}
+          {shareToken ? "Regenerate Share Link" : "Generate Share Link"}
         </button>
 
         {shareUrl && (
@@ -382,6 +385,7 @@ export default function EventView() {
             <button
               onClick={copyShareUrl}
               className="bg-[var(--accent)] hover:bg-[var(--accent-dark)] text-white px-3 rounded-r text-sm"
+              title="Copy share link"
             >
               {copied ? "Copied!" : "Copy"}
             </button>
