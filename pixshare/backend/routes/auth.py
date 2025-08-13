@@ -2,11 +2,13 @@
 from flask import Blueprint, request, jsonify, make_response
 from extensions import db, bcrypt
 from models.user import User
+from flask_cors import cross_origin
 from flask_jwt_extended import create_access_token, unset_jwt_cookies, set_access_cookies
 
 auth_bp = Blueprint("auth", __name__)
 
 @auth_bp.route("/login", methods=["POST"])
+@cross_origin(supports_credentials=True)
 def login():
     data = request.get_json() or {}
     email = (data.get("email") or "").strip().lower()

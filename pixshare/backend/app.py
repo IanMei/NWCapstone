@@ -20,7 +20,12 @@ from routes.comments import comments_bp
 
 app = Flask(__name__)
 # If using Vite proxy (same-origin), CORS is optional. Safe to leave on:
-CORS(app)
+CORS(
+    app,
+    supports_credentials=True,
+    resources={r"/api/*": {"origins": "*"}, r"/uploads/*": {"origins": "*"}},
+    allow_headers=["Content-Type", "Authorization"],
+)
 
 app.config.from_object(Config)
 

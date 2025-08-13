@@ -30,7 +30,7 @@ export default function Login() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         // IMPORTANT: we are header-only, so don't send or set cookies
-        credentials: "omit",
+        credentials: "include",  
         cache: "no-store",
         body: JSON.stringify(formData),
       });

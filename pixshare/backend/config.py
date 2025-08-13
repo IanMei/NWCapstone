@@ -21,7 +21,8 @@ class Config:
     # - /uploads will accept headers or cookies
     # Allow both header + cookie, but we’ll scope the cookie to /uploads only
     JWT_TOKEN_LOCATION = ["headers", "cookies"]
+    JWT_ACCESS_COOKIE_PATH = "/uploads"  # <-- cookie only goes to /uploads, not /api
     JWT_COOKIE_SAMESITE = "Lax"          # same-site so it’s sent to your proxied /uploads
     JWT_COOKIE_SECURE = False            # dev over http
     JWT_COOKIE_CSRF_PROTECT = False      # safe here since we’re scoping the cookie path
-    JWT_ACCESS_COOKIE_PATH = "/uploads"  # <-- cookie only goes to /uploads, not /api
+
