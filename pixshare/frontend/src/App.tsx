@@ -13,8 +13,11 @@ import Events from "./pages/authuserarea/Events";
 import EventView from "./pages/authuserarea/EventView";
 import Settings from "./pages/authuserarea/Settings";
 import Editor from "./pages/authuserarea/Editor";
+
+// Shared pages
 import SharedPhoto from "./pages/Shared/SharedPhoto";
 import SharedAlbum from "./pages/Shared/SharedAlbum";
+import SharedEvent from "./pages/Shared/SharedEvent";
 
 
 
@@ -31,6 +34,7 @@ function App() {
         {/*Shared*/}
         <Route path="/shared/photo/:token" element={<SharedPhoto />} />
         <Route path="/shared/album/:token" element={<SharedAlbum />} />
+        <Route path="/shared/event/:token" element={<SharedEvent />} />
 
         {/* Authenticated */}
         <Route path="/dashboard" element={<Dashboard />} />

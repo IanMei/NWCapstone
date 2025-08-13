@@ -12,6 +12,14 @@ type EventDetails = {
   shareId?: string | null;
 };
 
+type Photo = {
+  id: number;
+  filename: string;
+  filepath: string;   // relative path under /uploads
+  uploaded_at: string;
+  album_id?: number;  // we add this client-side so we can filter
+};
+
 const noCacheFetchInit = (headers: HeadersInit): RequestInit => ({
   method: "GET",
   headers: {
@@ -33,6 +41,11 @@ export default function EventView() {
   const [selectedAlbumIds, setSelectedAlbumIds] = useState<number[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [errorMsg, setErrorMsg] = useState<string>("");
+
+  // photos-in-event
+  const [eventPhotos, setEventPhotos] = useState<Photo[]>([]);
+  const [photosLoading, setPhotosLoading] = useState<boolean>(false);
+  const [albumFilter, setAlbumFilter] = useState<number | "all">("all");
 
   // share UI
   const [shareToken, setShareToken] = useState<string>("");
@@ -101,6 +114,47 @@ export default function EventView() {
     }
   };
 
+  // Fetch photos for all albums inside this event
+  const fetchEventPhotos = async (albums: Album[]) => {
+    if (!albums || albums.length === 0) {
+      setEventPhotos([]);
+      return;
+    }
+    setPhotosLoading(true);
+    try {
+      const results = await Promise.all(
+        albums.map(async (a) => {
+          const url = `${BASE_URL}/albums/${a.id}/photos?_=${Date.now()}`;
+          const res = await fetch(url, noCacheFetchInit({ Authorization: `Bearer ${token}` }));
+          if (!res.ok) {
+            // If one album fails, log and continue the rest
+            try {
+              const data = await res.json();
+              console.warn("Album photos fetch failed:", a.id, data?.msg || res.statusText);
+            } catch {
+              console.warn("Album photos fetch failed:", a.id, res.statusText);
+            }
+            return [] as Photo[];
+          }
+          const data = await res.json();
+          const withAlbum = (data.photos || []).map((p: Photo) => ({
+            ...p,
+            album_id: a.id,
+          }));
+          return withAlbum as Photo[];
+        })
+      );
+      const merged = results.flat();
+      setEventPhotos(merged);
+    } catch (e) {
+      console.error("fetchEventPhotos error:", e);
+      setEventPhotos([]);
+    } finally {
+      setPhotosLoading(false);
+    }
+  };
+
+  // Initial load
   useEffect(() => {
     if (!requireAuth()) return;
     setLoading(true);
@@ -112,11 +166,24 @@ export default function EventView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId]);
 
+  // When eventInfo.albums changes, (re)load photos for those albums
+  useEffect(() => {
+    if (eventInfo?.albums) {
+      fetchEventPhotos(eventInfo.albums);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventInfo?.albums?.map((a) => a.id).join(",")]);
+
   const availableAlbums = useMemo(() => {
     if (!eventInfo) return allAlbums;
     const existing = new Set(eventInfo.albums.map((a) => a.id));
     return allAlbums.filter((a) => !existing.has(a.id));
   }, [allAlbums, eventInfo]);
+
+  const filteredPhotos = useMemo(() => {
+    if (albumFilter === "all") return eventPhotos;
+    return eventPhotos.filter((p) => p.album_id === albumFilter);
+  }, [eventPhotos, albumFilter]);
 
   const toggleSelect = (id: number) => {
     setSelectedAlbumIds((prev) =>
@@ -138,7 +205,7 @@ export default function EventView() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.msg || "Failed to add albums");
-      await fetchEvent();
+      await fetchEvent();              // refresh event (and photos via effect)
       setSelectedAlbumIds([]);
     } catch (err: any) {
       console.error("addSelectedAlbums error:", err);
@@ -156,14 +223,13 @@ export default function EventView() {
       });
 
       if (res.status === 304) {
-        // Treat as success (state likely unchanged)
         await fetchEvent();
         return;
       }
 
       const data = await res.json();
       if (!res.ok) throw new Error(data?.msg || "Failed to remove album");
-      await fetchEvent();
+      await fetchEvent();              // refresh event (and photos via effect)
     } catch (err: any) {
       console.error("removeAlbum error:", err);
       alert(err.message || "Remove failed");
@@ -268,9 +334,10 @@ export default function EventView() {
   }
 
   const albumCount = eventInfo.albums.length;
+  const IMG_BASE = BASE_URL.replace("/api", ""); // for /uploads/**
 
   return (
-    <main className="p-6 max-w-4xl mx-auto">
+    <main className="p-6 max-w-5xl mx-auto">
       {/* Back */}
       <div className="mb-2">
         <button
@@ -315,7 +382,6 @@ export default function EventView() {
             <button
               onClick={copyShareUrl}
               className="bg-[var(--accent)] hover:bg-[var(--accent-dark)] text-white px-3 rounded-r text-sm"
-              title="Copy share link"
             >
               {copied ? "Copied!" : "Copy"}
             </button>
@@ -367,7 +433,7 @@ export default function EventView() {
       </section>
 
       {/* Current albums */}
-      <section className="bg-white rounded shadow p-4">
+      <section className="bg-white rounded shadow p-4 mb-6">
         <h2 className="text-lg font-semibold mb-3">Albums in this Event</h2>
         {eventInfo.albums.length === 0 ? (
           <p className="text-sm text-gray-500">No albums added yet.</p>
@@ -390,6 +456,64 @@ export default function EventView() {
               </li>
             ))}
           </ul>
+        )}
+      </section>
+
+      {/* Photos in event + filter */}
+      <section className="bg-white rounded shadow p-4">
+        <div className="mb-3 flex flex-col sm:flex-row sm:items-center gap-2 justify-between">
+          <h2 className="text-lg font-semibold">Photos in this Event</h2>
+
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-gray-600">Filter by album:</label>
+            <select
+              className="border rounded px-2 py-1 text-sm"
+              value={albumFilter}
+              onChange={(e) =>
+                setAlbumFilter(
+                  e.target.value === "all" ? "all" : Number(e.target.value)
+                )
+              }
+            >
+              <option value="all">All albums</option>
+              {eventInfo.albums.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {photosLoading ? (
+          <p className="text-sm text-gray-500">Loading photos…</p>
+        ) : filteredPhotos.length === 0 ? (
+          <p className="text-sm text-gray-500">No photos to display.</p>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+            {filteredPhotos.map((p) => (
+              <div key={`${p.album_id}-${p.id}`} className="border rounded overflow-hidden shadow">
+                <img
+                  src={`${IMG_BASE}/uploads/${p.filepath}`}
+                  alt={p.filename}
+                  className="w-full h-44 object-cover"
+                  loading="lazy"
+                />
+                <div className="px-2 py-1 text-xs text-gray-600 flex justify-between">
+                  <span className="truncate" title={p.filename}>
+                    {p.filename}
+                  </span>
+                  {p.album_id && (
+                    <span className="ml-2 text-gray-400">
+                      #
+                      {eventInfo.albums.find((a) => a.id === p.album_id)?.name ??
+                        p.album_id}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </section>
     </main>
