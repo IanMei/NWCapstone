@@ -10,10 +10,12 @@ import Albums from "./pages/authuserarea/Albums";
 import AlbumView from "./pages/authuserarea/AlbumView";
 import PhotoView from "./pages/authuserarea/PhotoView";
 import Events from "./pages/authuserarea/Events";
+import EventView from "./pages/authuserarea/EventView";
 import Settings from "./pages/authuserarea/Settings";
 import Editor from "./pages/authuserarea/Editor";
 import SharedPhoto from "./pages/Shared/SharedPhoto";
 import SharedAlbum from "./pages/Shared/SharedAlbum";
+
 
 
 function App() {
@@ -36,6 +38,7 @@ function App() {
         <Route path="/albums/:albumId" element={<AlbumView />} />
         <Route path="/albums/:albumId/photo/:photoId" element={<PhotoView />} />
         <Route path="/events" element={<Events />} />
+        <Route path="/events/:eventId" element={<EventView />} />
         <Route path="/account/settings" element={<Settings />} />
         <Route path="/future/editor" element={<Editor />} />
       </Routes>
