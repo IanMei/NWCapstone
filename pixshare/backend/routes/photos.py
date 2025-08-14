@@ -1,4 +1,3 @@
-# backend/routes/photos.py
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from werkzeug.utils import secure_filename
@@ -19,6 +18,20 @@ def _uid():
         return int(uid)
     except (TypeError, ValueError):
         return uid
+
+def _is_garbage_name(name: str) -> bool:
+    """Filter macOS/Windows junk and AppleDouble companions."""
+    if not name:
+        return True
+    base = os.path.basename(name)
+    lower = base.lower()
+    return (
+        base.startswith(".") or         # includes ._*
+        "_._" in base or                # e.g. Banquet_._DSC_1234.JPG
+        lower == ".ds_store" or
+        lower == "thumbs.db" or
+        lower == "desktop.ini"
+    )
 
 @photos_bp.route("/albums/<int:album_id>/photos", methods=["GET"])
 @jwt_required(locations=["headers"])
@@ -58,17 +71,39 @@ def upload_photos(album_id):
 
     saved_photos = []
     for file in files:
-        if not file or file.filename == "":
+        if not file or not file.filename:
             continue
 
-        filename = secure_filename(file.filename)
+        original_name = file.filename
+        base_name = os.path.basename(original_name)
+
+        # Defense: skip macOS/Windows junk and AppleDouble companions
+        if _is_garbage_name(base_name):
+            continue
+
+        safe_name = secure_filename(base_name)
+
         folder_path = os.path.join(UPLOAD_FOLDER, str(user_id), str(album_id))
         os.makedirs(folder_path, exist_ok=True)
 
-        filepath = os.path.join(folder_path, filename)
-        file.save(filepath)
-
+        filepath = os.path.join(folder_path, safe_name)
         rel_path = os.path.relpath(filepath, BASE_UPLOAD_DIR)
+
+        # Skip duplicates by filename within the same album for this user
+        existing = Photo.query.filter_by(
+            album_id=album.id, user_id=user_id, filename=safe_name
+        ).first()
+        if existing:
+            # If the physical file is missing, (re)save it; otherwise just skip
+            if not os.path.exists(os.path.join(BASE_UPLOAD_DIR, existing.filepath)):
+                try:
+                    file.save(os.path.join(BASE_UPLOAD_DIR, existing.filepath))
+                except Exception:
+                    pass
+            continue
+
+        # Save the file
+        file.save(filepath)
 
         try:
             size_bytes = os.path.getsize(filepath)
@@ -76,7 +111,7 @@ def upload_photos(album_id):
             size_bytes = 0
 
         photo = Photo(
-            filename=filename,
+            filename=safe_name,
             filepath=rel_path,
             album_id=album.id,
             user_id=user_id,

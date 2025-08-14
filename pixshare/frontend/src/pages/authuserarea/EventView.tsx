@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
-import { BASE_URL } from "../../utils/api";
+import { BASE_URL, PHOTO_BASE_URL } from "../../utils/api";
 
 type Album = { id: number; name: string; photo_count?: number };
 type EventDetails = {
@@ -9,7 +9,7 @@ type EventDetails = {
   description?: string | null;
   date?: string | null;
   albums: Album[];
-  shareId?: string | null; // ignored for initial UI to avoid stale link
+  shareId?: string | null;
 };
 
 type Photo = {
@@ -63,6 +63,13 @@ export default function EventView() {
       return false;
     }
     return true;
+  };
+
+  // Build /uploads URL with JWT as query (?a=) for owner/participant access
+  const imgUrl = (relPath: string) => {
+    const base = `${PHOTO_BASE_URL}/uploads/${relPath}`;
+    const jwt = getToken();
+    return jwt ? `${base}?a=${encodeURIComponent(jwt)}` : base;
   };
 
   const fetchEvent = async () => {
@@ -361,7 +368,6 @@ export default function EventView() {
   }
 
   const albumCount = eventInfo.albums.length;
-  const IMG_BASE = BASE_URL.replace("/api", ""); // for /uploads/**
 
   return (
     <main className="p-6 max-w-5xl mx-auto">
@@ -522,7 +528,7 @@ export default function EventView() {
             {filteredPhotos.map((p) => (
               <div key={`${p.album_id}-${p.id}`} className="border rounded overflow-hidden shadow">
                 <img
-                  src={`${IMG_BASE}/uploads/${p.filepath}`}
+                  src={imgUrl(p.filepath)}
                   alt={p.filename}
                   className="w-full h-44 object-cover"
                   loading="lazy"

@@ -29,7 +29,11 @@ export default function AlbumView() {
   const getToken = () => {
     const t = localStorage.getItem("token");
     return t && t !== "undefined" ? t : null;
-  };
+    };
+  const ownerImgQS = (() => {
+    const jwt = getToken();
+    return jwt ? `?a=${encodeURIComponent(jwt)}` : "";
+  })();
 
   const noCache = (url: string) => `${url}${url.includes("?") ? "&" : "?"}_=${Date.now()}`;
   const authHeaders = (): HeadersInit => {
@@ -89,12 +93,32 @@ export default function AlbumView() {
     }
   };
 
+  // ---- Junk file filter (prevents AppleDouble, .DS_Store, etc.) -------------
+  const isGarbageName = (name: string) => {
+    const base = name.split("/").pop() || name; // in case of weird paths
+    const lower = base.toLowerCase();
+    return (
+      base.startsWith(".") ||          // dotfiles (includes ._*)
+      base.includes("_._") ||          // AppleDouble after a prefixed folder, e.g. Banquet_._DSC.jpg
+      lower === ".ds_store" ||
+      lower === "thumbs.db" ||
+      lower === "desktop.ini"
+    );
+  };
+
   // Handles both files and folder uploads
   const uploadFiles = async (files: File[]) => {
     if (!files.length || !ensureAuthed()) return;
 
+    // Filter out macOS/Windows junk and AppleDouble variants
+    const clean = files.filter((f) => !isGarbageName(f.name));
+    if (clean.length === 0) {
+      console.warn("All selected files were filtered out as junk.");
+      return;
+    }
+
     const formData = new FormData();
-    files.forEach((file) => formData.append("photos", file));
+    clean.forEach((file) => formData.append("photos", file));
 
     try {
       setUploading(true);
@@ -103,7 +127,7 @@ export default function AlbumView() {
         headers: authHeaders(),
         body: formData,
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         if (handleAuthError(res.status)) return;
         console.error("Upload failed:", data);
@@ -335,7 +359,7 @@ export default function AlbumView() {
           >
             <Link to={`/albums/${albumId}/photo/${photo.id}`}>
               <img
-                src={`${PHOTO_BASE_URL}/uploads/${photo.filepath}`}
+                src={`${PHOTO_BASE_URL}/uploads/${photo.filepath}${ownerImgQS}`}
                 alt={photo.filename}
                 className="w-full h-48 object-cover"
               />
