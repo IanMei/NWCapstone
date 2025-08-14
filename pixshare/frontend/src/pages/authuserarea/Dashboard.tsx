@@ -1,24 +1,38 @@
+// src/pages/Dashboard/Dashboard.tsx
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { BASE_URL } from "../../utils/api";
+import { BASE_URL, PHOTO_BASE_URL } from "../../utils/api";
 
 type Album = {
   id: number;
   name: string;
 };
 
+type EventItem = {
+  id: number;
+  name: string;
+  shareId?: string | null;
+};
+
+type EventCard = {
+  id: number;
+  name: string;
+  coverPath?: string | null; // photos/<user>/<album>/file.jpg
+};
+
 const noCache = (url: string) => `${url}${url.includes("?") ? "&" : "?"}_=${Date.now()}`;
 
 export default function Dashboard() {
   const [albums, setAlbums] = useState<Album[]>([]);
+  const [recentEvents, setRecentEvents] = useState<EventCard[]>([]);
   const [storageUsed, setStorageUsed] = useState<number>(0);
   const [storageLimit, setStorageLimit] = useState<number>(10);
+  const [loadingEvents, setLoadingEvents] = useState<boolean>(true);
   const navigate = useNavigate();
 
   const token = localStorage.getItem("token");
-  const authHeader: HeadersInit = token && token !== "undefined"
-    ? { Authorization: `Bearer ${token}` }
-    : {};
+  const authHeader: HeadersInit =
+    token && token !== "undefined" ? { Authorization: `Bearer ${token}` } : {};
 
   const ensureAuthOrRedirect = () => {
     if (!token || token === "undefined") {
@@ -47,7 +61,10 @@ export default function Dashboard() {
       if (!res.ok) {
         if (handleAuthError(res.status)) return;
         let msg = "Failed to fetch albums";
-        try { const j = await res.json(); msg = j?.msg || msg; } catch {}
+        try {
+          const j = await res.json();
+          msg = j?.msg || msg;
+        } catch {}
         throw new Error(msg);
       }
       const data = await res.json();
@@ -68,7 +85,10 @@ export default function Dashboard() {
       if (!res.ok) {
         if (handleAuthError(res.status)) return;
         let msg = "Failed to fetch storage";
-        try { const j = await res.json(); msg = j?.msg || msg; } catch {}
+        try {
+          const j = await res.json();
+          msg = j?.msg || msg;
+        } catch {}
         throw new Error(msg);
       }
       const data = await res.json();
@@ -79,14 +99,83 @@ export default function Dashboard() {
     }
   };
 
+  // Fetch recent 3 events and derive a cover image (first album's first photo)
+  const fetchRecentEventsWithCovers = async () => {
+    if (!ensureAuthOrRedirect()) return;
+    try {
+      setLoadingEvents(true);
+      // List events (server returns newest first in your API)
+      const listRes = await fetch(noCache(`${BASE_URL}/events`), {
+        headers: authHeader,
+        credentials: "omit",
+        cache: "no-store",
+      });
+      if (!listRes.ok) {
+        if (handleAuthError(listRes.status)) return;
+        let msg = "Failed to fetch events";
+        try {
+          const j = await listRes.json();
+          msg = j?.msg || msg;
+        } catch {}
+        throw new Error(msg);
+      }
+      const listData = await listRes.json();
+      const recent = (listData.events || []).slice(0, 3) as EventItem[];
+
+      const withCovers = await Promise.all(
+        recent.map(async (ev): Promise<EventCard> => {
+          try {
+            // Get event detail -> albums
+            const evRes = await fetch(noCache(`${BASE_URL}/events/${ev.id}`), {
+              headers: authHeader,
+              credentials: "omit",
+              cache: "no-store",
+            });
+            if (!evRes.ok) throw new Error("event detail failed");
+            const evData = await evRes.json();
+            const albums: { id: number; name: string }[] = evData?.event?.albums || [];
+            if (!albums.length) return { id: ev.id, name: ev.name, coverPath: null };
+
+            // Get first album's photos
+            const firstAlbumId = albums[0].id;
+            const phRes = await fetch(noCache(`${BASE_URL}/albums/${firstAlbumId}/photos`), {
+              headers: authHeader,
+              credentials: "omit",
+              cache: "no-store",
+            });
+            if (!phRes.ok) throw new Error("album photos failed");
+            const phData = await phRes.json();
+            const firstPhoto = (phData.photos || [])[0];
+            return {
+              id: ev.id,
+              name: ev.name,
+              coverPath: firstPhoto ? firstPhoto.filepath : null,
+            };
+          } catch {
+            return { id: ev.id, name: ev.name, coverPath: null };
+          }
+        })
+      );
+
+      setRecentEvents(withCovers);
+    } catch (err) {
+      console.error("Failed to fetch recent events:", err);
+      setRecentEvents([]);
+    } finally {
+      setLoadingEvents(false);
+    }
+  };
+
   useEffect(() => {
     fetchAlbums();
     fetchStorage();
+    fetchRecentEventsWithCovers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const recentAlbums = albums.slice(-3).reverse();
-  const pct = storageLimit > 0 ? Math.min(100, Math.round((storageUsed / storageLimit) * 100)) : 0;
+  const pct =
+    storageLimit > 0 ? Math.min(100, Math.round((storageUsed / storageLimit) * 100)) : 0;
 
   return (
     <main className="p-6">
@@ -107,6 +196,47 @@ export default function Dashboard() {
         <p className="text-sm text-gray-600">
           {storageUsed.toFixed(2)} GB of {storageLimit.toFixed(2)} GB used ({pct}%)
         </p>
+      </section>
+
+      {/* Recent Events (with cover) */}
+      <section className="mb-6 p-4 bg-white rounded shadow">
+        <h2 className="text-xl font-semibold mb-3 text-[var(--primary)]">Recent Events</h2>
+        {loadingEvents ? (
+          <p className="text-sm text-gray-500">Loading events…</p>
+        ) : recentEvents.length === 0 ? (
+          <p className="text-sm text-gray-500">No events yet.</p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {recentEvents.map((ev) => {
+              const coverUrl =
+                ev.coverPath ? `${PHOTO_BASE_URL}/uploads/${ev.coverPath}` : null;
+              return (
+                <Link
+                  key={ev.id}
+                  to={`/events/${ev.id}`}
+                  className="group block rounded overflow-hidden shadow bg-white hover:shadow-md transition-shadow"
+                  title={ev.name}
+                >
+                  {coverUrl ? (
+                    <img
+                      src={coverUrl}
+                      alt={ev.name}
+                      className="w-full h-32 object-cover"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="w-full h-32 bg-gray-200 flex items-center justify-center text-gray-500 text-sm">
+                      No cover image
+                    </div>
+                  )}
+                  <div className="p-3 text-[var(--secondary)] font-medium truncate">
+                    {ev.name}
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       {/* Recent Albums */}

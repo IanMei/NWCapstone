@@ -188,13 +188,6 @@ def get_event(event_id):
 @events_bp.route("/events/<int:event_id>/albums", methods=["POST"])
 @jwt_required(locations=["headers"])
 def add_albums_to_event(event_id):
-    """
-    Allow:
-      - Owner
-      - Participant
-      - Anyone with a valid public share token (?t=...)
-    to attach albums THEY own.
-    """
     user_id = _uid()
     token = (request.args.get("t") or "").strip()
 
@@ -203,9 +196,8 @@ def add_albums_to_event(event_id):
         return jsonify({"msg": "Event not found"}), 404
 
     is_owner = str(ev.user_id) == str(user_id)
-    is_participant = _is_participant(user_id, ev.id)
     is_collab = can_contribute_event(token, ev.id)
-    if not (is_owner or is_participant or is_collab):
+    if not (is_owner or is_collab):
         return jsonify({"msg": "Not authorized for this event"}), 403
 
     data = request.get_json() or {}
@@ -213,31 +205,36 @@ def add_albums_to_event(event_id):
     if not isinstance(album_ids, list) or not album_ids:
         return jsonify({"msg": "album_ids must be a non-empty list"}), 400
 
-    owned_ids = {
-        a.id
-        for (a,) in db.session.query(Album.id)
-        .filter(Album.id.in_(album_ids), Album.user_id == user_id)
-        .all()
-    }
+    # Normalize incoming IDs to integers
+    try:
+        album_ids = [int(a) for a in album_ids]
+    except (TypeError, ValueError):
+        return jsonify({"msg": "album_ids must be integers"}), 400
+
+    # ✅ Only allow adding albums owned by the caller
+    owned_ids = set(
+        db.session.execute(
+            select(Album.id).where(Album.id.in_(album_ids), Album.user_id == user_id)
+        ).scalars().all()
+    )
     if not owned_ids:
         return jsonify({"msg": "No valid albums to add"}), 400
 
     ev_col, al_col = _ea_cols()
-    existing = {
-        row[0]
-        for row in db.session.execute(
+
+    # Find which of those are already attached
+    existing = set(
+        db.session.execute(
             select(al_col).where(ev_col == ev.id, al_col.in_(owned_ids))
-        ).all()
-    }
+        ).scalars().all()
+    )
 
     to_add = [{"event_id": ev.id, "album_id": aid} for aid in owned_ids if aid not in existing]
     if to_add:
         _ea_insert_many(to_add)
         db.session.commit()
 
-    # Return updated event; include participant token if applicable
-    pr = None if is_owner else EventParticipant.query.filter_by(event_id=ev.id, user_id=user_id).first()
-    return jsonify({"event": _serialize_event(ev, participant_row=pr)}), 200
+    return jsonify({"event": _serialize_event(ev)}), 200
 
 @events_bp.route("/events/<int:event_id>/albums/<int:album_id>", methods=["DELETE"])
 @jwt_required(locations=["headers"])

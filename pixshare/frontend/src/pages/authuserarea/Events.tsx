@@ -1,3 +1,4 @@
+// src/pages/Events/Events.tsx
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { BASE_URL } from "../../utils/api";
@@ -13,6 +14,8 @@ const noCache = (url: string) => `${url}${url.includes("?") ? "&" : "?"}_=${Date
 export default function Events() {
   const [events, setEvents] = useState<EventItem[]>([]);
   const [eventName, setEventName] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
   const navigate = useNavigate();
 
   const token = localStorage.getItem("token") || "";
@@ -37,7 +40,10 @@ export default function Events() {
       if (!res.ok) {
         if (handleAuthError(res.status)) return;
         let msg = "Failed to fetch events";
-        try { const j = await res.json(); msg = j?.msg || msg; } catch {}
+        try {
+          const j = await res.json();
+          msg = j?.msg || msg;
+        } catch {}
         throw new Error(msg);
       }
       const data = await res.json();
@@ -48,18 +54,21 @@ export default function Events() {
   };
 
   const handleCreateEvent = async () => {
-    if (!eventName.trim()) return;
+    const name = eventName.trim();
+    if (!name || creating) return;
     try {
+      setCreating(true);
       const res = await fetch(`${BASE_URL}/events`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...headers },
         credentials: "omit",
         cache: "no-store",
-        body: JSON.stringify({ name: eventName }),
+        body: JSON.stringify({ name }),
       });
       const data = await res.json();
       if (res.ok) {
-        setEvents((prev) => [...prev, data.event]);
+        // Put new event at top
+        setEvents((prev) => [data.event, ...prev]);
         setEventName("");
       } else {
         if (handleAuthError(res.status)) return;
@@ -67,24 +76,34 @@ export default function Events() {
       }
     } catch (err) {
       console.error("Create failed", err);
+    } finally {
+      setCreating(false);
     }
   };
 
-  const copyShare = async (shareId?: string | null) => {
-    if (!shareId) return;
-    const url = `${window.location.origin}/shared/event/${shareId}`;
+  const handleDeleteEvent = async (eventId: number) => {
+    if (!confirm("Delete this event? This cannot be undone.")) return;
     try {
-      await navigator.clipboard.writeText(url);
-    } catch {
-      // Fallback
-      const ta = document.createElement("textarea");
-      ta.value = url;
-      ta.style.position = "fixed";
-      ta.style.opacity = "0";
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand("copy");
-      document.body.removeChild(ta);
+      setDeletingId(eventId);
+      const res = await fetch(`${BASE_URL}/events/${eventId}`, {
+        method: "DELETE",
+        headers,
+        credentials: "omit",
+      });
+      if (!res.ok) {
+        if (handleAuthError(res.status)) return;
+        let msg = "Delete failed";
+        try {
+          const j = await res.json();
+          msg = j?.msg || msg;
+        } catch {}
+        throw new Error(msg);
+      }
+      setEvents((prev) => prev.filter((e) => e.id !== eventId));
+    } catch (err) {
+      console.error("Delete failed", err);
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -97,6 +116,13 @@ export default function Events() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const onKeyDownCreate = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleCreateEvent();
+    }
+  };
+
   return (
     <main className="p-6 max-w-2xl mx-auto">
       <h1 className="text-2xl font-bold text-[var(--primary)] mb-4">Event Albums</h1>
@@ -108,53 +134,49 @@ export default function Events() {
           placeholder="Event Name (e.g., Wedding 2025)"
           value={eventName}
           onChange={(e) => setEventName(e.target.value)}
+          onKeyDown={onKeyDownCreate}
           className="flex-1 px-3 py-2 border rounded"
         />
         <button
           onClick={handleCreateEvent}
-          className="bg-[var(--accent)] hover:bg-[var(--accent-dark)] text-white px-4 py-2 rounded"
+          disabled={creating || !eventName.trim()}
+          className="bg-[var(--accent)] hover:bg-[var(--accent-dark)] disabled:opacity-60 text-white px-4 py-2 rounded"
         >
-          Create
+          {creating ? "Creating..." : "Create"}
         </button>
       </div>
 
       {/* Events List */}
-      <ul className="space-y-4">
-        {events.map((event) => (
-          <li key={event.id} className="bg-white p-4 rounded shadow">
-            <div className="flex items-center justify-between gap-3">
-              <button
-                onClick={() => navigate(`/events/${event.id}`)}
-                className="text-left text-lg font-semibold text-[var(--secondary)] hover:underline"
-                title="Open event"
-              >
-                {event.name}
-              </button>
+      {events.length === 0 ? (
+        <p className="text-sm text-gray-600">No events yet. Create your first one above.</p>
+      ) : (
+        <ul className="space-y-4">
+          {events.map((event) => (
+            <li key={event.id} className="bg-white p-4 rounded shadow">
+              <div className="flex items-center justify-between gap-3">
+                <button
+                  onClick={() => navigate(`/events/${event.id}`)}
+                  className="text-left text-lg font-semibold text-[var(--secondary)] hover:underline"
+                  title="Open event"
+                >
+                  {event.name}
+                </button>
 
-              <div className="flex items-center gap-2">
-                {event.shareId ? (
+                <div className="flex items-center gap-2">
                   <button
-                    onClick={() => copyShare(event.shareId)}
-                    className="text-sm bg-[var(--primary)] hover:bg-[var(--secondary)] text-white px-3 py-1 rounded"
-                    title="Copy public share link"
+                    onClick={() => handleDeleteEvent(event.id)}
+                    disabled={deletingId === event.id}
+                    className="text-sm bg-red-500 hover:bg-red-600 disabled:opacity-60 text-white px-3 py-1 rounded"
+                    title="Delete event"
                   >
-                    Copy Share Link
+                    {deletingId === event.id ? "Deleting..." : "Delete"}
                   </button>
-                ) : (
-                  <span className="text-xs text-gray-500">No share link</span>
-                )}
+                </div>
               </div>
-            </div>
-
-            {event.shareId && (
-              <p className="text-sm text-gray-600 mt-1 break-all">
-                Share URL:{" "}
-                <code>{`${window.location.origin}/shared/event/${event.shareId}`}</code>
-              </p>
-            )}
-          </li>
-        ))}
-      </ul>
+            </li>
+          ))}
+        </ul>
+      )}
     </main>
   );
 }
