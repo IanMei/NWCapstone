@@ -131,8 +131,20 @@ def serve_uploads(filename):
     if not uid:
         abort(401)
 
+    # Owner may fetch anything under their own user folder
     if str(req_user_id) == str(uid):
         return send_from_directory(UPLOAD_ROOT, filename, conditional=True)
+
+    # Participant may fetch files of albums linked to events they joined
+    if event_albums is not None:
+        exists = (
+            db.session.query(event_albums.c.event_id)
+            .join(EventParticipant, EventParticipant.event_id == event_albums.c.event_id)
+            .filter(event_albums.c.album_id == req_album_id, EventParticipant.user_id == uid)
+            .first()
+        )
+        if exists:
+            return send_from_directory(UPLOAD_ROOT, filename, conditional=True)
 
     abort(403)
     
