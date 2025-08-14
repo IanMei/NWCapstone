@@ -1,4 +1,3 @@
-// src/pages/PhotoView.tsx
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { BASE_URL, PHOTO_BASE_URL } from "../../utils/api";
@@ -16,7 +15,7 @@ export default function PhotoView() {
 
   // Share UI
   const [shareToken, setShareToken] = useState<string>("");
-  const [allowComments, setAllowComments] = useState<boolean>(true); // <-- NEW
+  const [allowComments, setAllowComments] = useState<boolean>(true);
   const [copied, setCopied] = useState(false);
   const shareInputRef = useRef<HTMLInputElement>(null);
 
@@ -24,6 +23,11 @@ export default function PhotoView() {
     const t = localStorage.getItem("token");
     return t && t !== "undefined" ? t : null;
   };
+  const ownerImgQS = (() => {
+    const jwt = getToken();
+    return jwt ? `?a=${encodeURIComponent(jwt)}` : "";
+  })();
+
   const noCache = (u: string) => `${u}${u.includes("?") ? "&" : "?"}_=${Date.now()}`;
   const authHeaders = (): HeadersInit => {
     const token = getToken();
@@ -137,7 +141,7 @@ export default function PhotoView() {
       const res = await fetch(`${BASE_URL}/share/photo/${photoId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ can_comment: allowComments }), // <-- enable comments if checked
+        body: JSON.stringify({ can_comment: allowComments }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -203,7 +207,7 @@ export default function PhotoView() {
       {photo ? (
         <>
           <img
-            src={`${PHOTO_BASE_URL}/uploads/${photo.filepath}`}
+            src={`${PHOTO_BASE_URL}/uploads/${photo.filepath}${ownerImgQS}`}
             alt={photo.filename}
             className="w-full rounded shadow mb-4"
           />

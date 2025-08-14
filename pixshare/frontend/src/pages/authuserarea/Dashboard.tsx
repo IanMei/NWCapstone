@@ -1,4 +1,3 @@
-// src/pages/Dashboard/Dashboard.tsx
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { BASE_URL, PHOTO_BASE_URL } from "../../utils/api";
@@ -48,6 +47,13 @@ export default function Dashboard() {
       return true;
     }
     return false;
+  };
+
+  // Compose an /uploads image URL with ?a=<JWT>
+  const imgUrl = (relPath: string | null | undefined) => {
+    if (!relPath) return null;
+    const base = `${PHOTO_BASE_URL}/uploads/${relPath}`;
+    return token && token !== "undefined" ? `${base}?a=${encodeURIComponent(token)}` : base;
   };
 
   const fetchAlbums = async () => {
@@ -208,8 +214,7 @@ export default function Dashboard() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {recentEvents.map((ev) => {
-              const coverUrl =
-                ev.coverPath ? `${PHOTO_BASE_URL}/uploads/${ev.coverPath}` : null;
+              const coverUrl = imgUrl(ev.coverPath);
               return (
                 <Link
                   key={ev.id}

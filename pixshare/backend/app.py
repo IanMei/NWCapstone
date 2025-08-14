@@ -53,7 +53,7 @@ app.register_blueprint(shares_bp, url_prefix="/api")
 app.register_blueprint(comments_bp, url_prefix="/api")
 
 @app.route("/uploads/<path:filename>")
-@jwt_required(optional=True, locations=["headers", "cookies"])
+@jwt_required(optional=True, locations=["headers", "query_string"])
 def serve_uploads(filename):
     """
     Access rules:
@@ -61,24 +61,24 @@ def serve_uploads(filename):
          * album token: allow any file under photos/<user_id>/<album_id>/*
          * photo token: allow only the exact shared photo file
          * event token: allow any file whose album_id is attached to the event
-      - Owner with JWT (no token): may access photos/<user_id>/** only
+      - Owner/participant with JWT (via Authorization header OR ?a=<JWT>):
+         * owner may access photos/<owner_id>/**
+         * participant may access files of albums tied to events they joined
     """
-    uid = None  # <-- prevent UnboundLocalError by defining it up-front
-
-    token = (request.args.get("t") or request.args.get("token") or "").strip()
-
-    # Expected path structure: photos/<user_id>/<album_id>/rest/of/file
+    # Always require 'photos/<user>/<album>/...' path
     parts = filename.split("/")
     if len(parts) < 3 or parts[0] != "photos":
         abort(403)
 
+    # Parse path
     try:
         req_user_id = int(parts[1])
         req_album_id = int(parts[2])
     except (TypeError, ValueError):
         abort(403)
 
-    # ---- Public access via share token -------------------------------------
+    # 1) PUBLIC SHARE via ?t=
+    token = (request.args.get("t") or request.args.get("token") or "").strip()
     if token:
         s = Share.query.filter_by(token=token).first()
         if not s:
@@ -90,7 +90,7 @@ def serve_uploads(filename):
                 return send_from_directory(UPLOAD_ROOT, filename, conditional=True)
             abort(403)
 
-        # Photo share: only the exact file
+        # Photo share: only the exact shared file
         if s.photo_id:
             p = Photo.query.get(s.photo_id)
             if not p:
@@ -126,9 +126,10 @@ def serve_uploads(filename):
         # Unknown share type
         abort(403)
 
-    # ---- Owner access via JWT (no share token) -----------------------------
+    # 2) OWNER / PARTICIPANT via JWT (Authorization header OR ?a=<JWT>)
     uid = get_jwt_identity()
     if not uid:
+        # no valid JWT found in headers or query-string
         abort(401)
 
     # Owner may fetch anything under their own user folder
