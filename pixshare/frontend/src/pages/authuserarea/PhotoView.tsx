@@ -1,3 +1,4 @@
+// src/pages/PhotoView.tsx
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { BASE_URL, PHOTO_BASE_URL } from "../../utils/api";
@@ -8,10 +9,14 @@ type Photo = { id: number; filename: string; filepath: string; uploaded_at: stri
 export default function PhotoView() {
   const { albumId, photoId } = useParams();
   const navigate = useNavigate();
+
   const [photo, setPhoto] = useState<Photo | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState("");
+
+  // Share UI
   const [shareToken, setShareToken] = useState<string>("");
+  const [allowComments, setAllowComments] = useState<boolean>(true); // <-- NEW
   const [copied, setCopied] = useState(false);
   const shareInputRef = useRef<HTMLInputElement>(null);
 
@@ -125,14 +130,14 @@ export default function PhotoView() {
     }
   };
 
-  // Generate a share token for this photo
+  // Generate (or regenerate) a share token for this photo
   const generateShare = async () => {
     if (!ensureAuthed()) return;
     try {
       const res = await fetch(`${BASE_URL}/share/photo/${photoId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ can_comment: false }),
+        body: JSON.stringify({ can_comment: allowComments }), // <-- enable comments if checked
       });
       const data = await res.json();
       if (!res.ok) {
@@ -207,13 +212,24 @@ export default function PhotoView() {
           </p>
 
           {/* Share */}
-          <div className="mb-6 space-y-2">
-            <button
-              onClick={generateShare}
-              className="bg-[var(--accent)] hover:bg-[var(--accent-dark)] text-white px-3 py-2 rounded"
-            >
-              {shareToken ? "Regenerate Share Link" : "Generate Share Link"}
-            </button>
+          <div className="mb-6 space-y-3">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={generateShare}
+                className="bg-[var(--accent)] hover:bg-[var(--accent-dark)] text-white px-3 py-2 rounded"
+              >
+                {shareToken ? "Regenerate Share Link" : "Generate Share Link"}
+              </button>
+
+              <label className="inline-flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={allowComments}
+                  onChange={(e) => setAllowComments(e.target.checked)}
+                />
+                Allow comments on shared link
+              </label>
+            </div>
 
             {shareUrl && (
               <div className="flex items-stretch">
@@ -222,7 +238,7 @@ export default function PhotoView() {
                   readOnly
                   value={shareUrl}
                   onFocus={(e) => e.currentTarget.select()}
-                  className="flex-1 px-2 py-1 border rounded-l text-sm"
+                  className="flex-1 px-2 py-2 border rounded-l text-sm"
                 />
                 <button
                   onClick={copyShareUrl}
@@ -232,6 +248,13 @@ export default function PhotoView() {
                   {copied ? "Copied!" : "Copy"}
                 </button>
               </div>
+            )}
+
+            {shareToken && (
+              <p className="text-xs text-gray-600">
+                This share is currently <strong>{allowComments ? "comment-enabled" : "comment-disabled"}</strong>.
+                Regenerate to change the setting.
+              </p>
             )}
           </div>
 
@@ -259,6 +282,9 @@ export default function PhotoView() {
                   </button>
                 </li>
               ))}
+              {comments.length === 0 && (
+                <li className="text-sm text-gray-500">No comments yet.</li>
+              )}
             </ul>
 
             <form onSubmit={handleCommentSubmit} className="flex gap-2">
