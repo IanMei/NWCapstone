@@ -10,12 +10,15 @@ This is the Northwestern MSIS capstone project supervised by Prof.Amul Chapla & 
 -  Dashboard
 -  Photos
 -  Comments
-### Functions and Pages In Progress
 -  Sharing
 -  Events
 
+### Functions and Pages In Progress
+- Better UI
+- AI Tools
+
 ## Project progress
-██████████░░░░░ 80%
+████████████████████ 100%
 
 ## Project Introduction
 
