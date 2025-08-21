@@ -27,16 +27,19 @@ export default function Events() {
   const navigate = useNavigate();
 
   const getToken = (): string | null => {
-    const token = localStorage.getItem("token");
-    return token && token !== "undefined" ? token : null;
+    const t = localStorage.getItem("token");
+    return t && t !== "undefined" ? t : null;
   };
 
-  const ownerImgQS = (() => {
+  const authHeaders = (): HeadersInit => {
+    const t = getToken();
+    return t ? { Authorization: `Bearer ${t}` } : {};
+  };
+
+  const ownerImgQS = () => {
     const t = getToken();
     return t ? `?a=${encodeURIComponent(t)}` : "";
-  })();
-
-  const headers: HeadersInit = getToken() ? { Authorization: `Bearer ${getToken()}` } : {};
+  };
 
   const handleAuthError = (status: number) => {
     if (status === 401 || status === 422) {
@@ -46,10 +49,19 @@ export default function Events() {
     return false;
   };
 
+  const ensureAuthed = () => {
+    if (!getToken()) {
+      navigate("/login");
+      return false;
+    }
+    return true;
+  };
+
   const fetchEvents = async () => {
+    if (!ensureAuthed()) return;
     try {
       const res = await fetch(noCache(`${BASE_URL}/events`), {
-        headers,
+        headers: authHeaders(),
         credentials: "omit",
         cache: "no-store",
       });
@@ -70,8 +82,9 @@ export default function Events() {
     }
   };
 
-  // Load preview cover + photoCount for each event (sums album photo_count if available)
+  // Load preview cover + photoCount for each event
   const fetchEventMeta = async (list: EventItem[]) => {
+    if (!ensureAuthed()) return;
     if (!list.length) {
       setMeta({});
       return;
@@ -81,9 +94,9 @@ export default function Events() {
       const entries = await Promise.all(
         list.map(async (ev) => {
           try {
-            // 1) Get event detail -> albums (id, name, maybe photo_count)
+            // 1) event detail -> albums
             const evRes = await fetch(noCache(`${BASE_URL}/events/${ev.id}`), {
-              headers,
+              headers: authHeaders(),
               credentials: "omit",
               cache: "no-store",
             });
@@ -92,17 +105,16 @@ export default function Events() {
             const albums: { id: number; name: string; photo_count?: number }[] =
               evData?.event?.albums || [];
 
-            // Compute photoCount (use album.photo_count when present)
             const photoCount = albums.reduce(
               (sum, a) => sum + (typeof a.photo_count === "number" ? a.photo_count : 0),
               0
             );
 
-            // 2) Find first album that has at least one photo and use its first photo as cover
+            // 2) find first album with a photo -> cover
             let coverPath: string | null = null;
             for (const a of albums) {
               const phRes = await fetch(noCache(`${BASE_URL}/albums/${a.id}/photos`), {
-                headers,
+                headers: authHeaders(),
                 credentials: "omit",
                 cache: "no-store",
               });
@@ -131,27 +143,26 @@ export default function Events() {
 
   const handleCreateEvent = async () => {
     const name = eventName.trim();
-    if (!name || creating) return;
+    if (!name || creating || !ensureAuthed()) return;
     try {
       setCreating(true);
       const res = await fetch(`${BASE_URL}/events`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...headers },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         credentials: "omit",
         cache: "no-store",
         body: JSON.stringify({ name }),
       });
-      const data = await res.json();
-      if (res.ok) {
-        const next = [data.event, ...events];
-        setEvents(next);
-        setEventName("");
-        // fetch meta just for the new one
-        fetchEventMeta([data.event]);
-      } else {
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
         if (handleAuthError(res.status)) return;
-        throw new Error(data?.msg || "Create failed");
+        throw new Error((data as any)?.msg || "Create failed");
       }
+      const created = (data as any).event as EventItem;
+      setEvents((prev) => [created, ...prev]);
+      setEventName("");
+      // load meta for the new one
+      fetchEventMeta([created]);
     } catch (err) {
       console.error("Create failed", err);
     } finally {
@@ -160,13 +171,15 @@ export default function Events() {
   };
 
   const handleDeleteEvent = async (eventId: number) => {
+    if (!ensureAuthed()) return;
     if (!confirm("Delete this event? This cannot be undone.")) return;
     try {
       setDeletingId(eventId);
-      const res = await fetch(`${BASE_URL}/events/${eventId}`, {
+      const res = await fetch(noCache(`${BASE_URL}/events/${eventId}`), {
         method: "DELETE",
-        headers,
+        headers: authHeaders(),
         credentials: "omit",
+        cache: "no-store",
       });
       if (!res.ok) {
         if (handleAuthError(res.status)) return;
@@ -174,9 +187,15 @@ export default function Events() {
         try {
           const j = await res.json();
           msg = j?.msg || msg;
-        } catch {}
+        } catch {
+          try {
+            const t = await res.text();
+            if (t) msg = t;
+          } catch {}
+        }
         throw new Error(msg);
       }
+      // Update UI
       setEvents((prev) => prev.filter((e) => e.id !== eventId));
       setMeta((prev) => {
         const copy = { ...prev };
@@ -185,14 +204,14 @@ export default function Events() {
       });
     } catch (err) {
       console.error("Delete failed", err);
+      alert((err as Error).message || "Delete failed");
     } finally {
       setDeletingId(null);
     }
   };
 
   useEffect(() => {
-    const t = getToken();
-    if (!t) {
+    if (!getToken()) {
       navigate("/login");
       return;
     }
@@ -200,7 +219,6 @@ export default function Events() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // (Re)load meta whenever event set changes
   useEffect(() => {
     if (events.length) fetchEventMeta(events);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -219,7 +237,7 @@ export default function Events() {
     <main className="p-6">
       <h1 className="text-3xl font-bold text-[var(--primary)] mb-4">Event Albums</h1>
 
-      {/* Create */}
+      {/* Create Event */}
       <div className="mb-6 flex gap-2">
         <input
           type="text"
@@ -238,60 +256,59 @@ export default function Events() {
         </button>
       </div>
 
-      {/* Event cards with cover images (same visual style as Albums) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-        {events.map((ev) => {
-          const m = meta[ev.id];
-          const coverUrl =
-            m?.coverPath ? `${PHOTO_BASE_URL}/uploads/${m.coverPath}${ownerImgQS}` : null;
-          const count = m?.photoCount ?? 0;
-
-          return (
-            <div key={ev.id} className="rounded overflow-hidden shadow bg-white">
-              <Link to={`/events/${ev.id}`} title={ev.name} className="block">
-                {coverUrl ? (
-                  <img
-                    src={coverUrl}
-                    alt={ev.name}
-                    className="w-full h-40 md:h-48 object-cover"
-                    loading="lazy"
-                  />
-                ) : (
-                  <div className="w-full h-40 md:h-48 bg-gray-100 text-gray-500 flex items-center justify-center text-sm">
-                    {loadingMeta ? "Loading…" : "No cover image"}
-                  </div>
-                )}
-              </Link>
-
-              <div className="p-3 flex items-center justify-between">
-                <Link
-                  to={`/events/${ev.id}`}
-                  className="text-lg text-[var(--secondary)] hover:underline truncate"
-                >
-                  {ev.name}
-                </Link>
-                <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-700">
-                  {count} {plural(count, "photo")}
-                </span>
-              </div>
-
-              <div className="px-3 pb-3">
-                <button
-                  onClick={() => handleDeleteEvent(ev.id)}
-                  disabled={deletingId === ev.id}
-                  className="text-sm text-red-600 hover:underline disabled:opacity-60"
-                >
-                  {deletingId === ev.id ? "Deleting..." : "Delete"}
-                </button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Empty state */}
-      {events.length === 0 && (
+      {/* Event cards */}
+      {events.length === 0 ? (
         <p className="text-sm text-gray-600">No events yet. Create your first one above.</p>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+          {events.map((ev) => {
+            const m = meta[ev.id];
+            const coverUrl =
+              m?.coverPath ? `${PHOTO_BASE_URL}/uploads/${m.coverPath}${ownerImgQS()}` : null;
+            const count = m?.photoCount ?? 0;
+
+            return (
+              <div key={ev.id} className="rounded overflow-hidden shadow bg-white">
+                <Link to={`/events/${ev.id}`} title={ev.name} className="block">
+                  {coverUrl ? (
+                    <img
+                      src={coverUrl}
+                      alt={ev.name}
+                      className="w-full h-40 md:h-48 object-cover"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="w-full h-40 md:h-48 bg-gray-100 text-gray-500 flex items-center justify-center text-sm">
+                      {loadingMeta ? "Loading…" : "No cover image"}
+                    </div>
+                  )}
+                </Link>
+
+                <div className="p-3 flex items-center justify-between">
+                  <Link
+                    to={`/events/${ev.id}`}
+                    className="text-lg text-[var(--secondary)] hover:underline truncate"
+                  >
+                    {ev.name}
+                  </Link>
+                  <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-700">
+                    {count} {plural(count, "photo")}
+                  </span>
+                </div>
+
+                <div className="px-3 pb-3">
+                  <button
+                    onClick={() => handleDeleteEvent(ev.id)}
+                    disabled={deletingId === ev.id}
+                    className="text-sm text-red-600 hover:underline disabled:opacity-60"
+                  >
+                    {deletingId === ev.id ? "Deleting..." : "Delete"}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       )}
     </main>
   );
