@@ -110,7 +110,6 @@ export default function Dashboard() {
     if (!ensureAuthOrRedirect()) return;
     try {
       setLoadingEvents(true);
-      // List events (server returns newest first in your API)
       const listRes = await fetch(noCache(`${BASE_URL}/events`), {
         headers: authHeader,
         credentials: "omit",
@@ -131,7 +130,6 @@ export default function Dashboard() {
       const withCovers = await Promise.all(
         recent.map(async (ev): Promise<EventCard> => {
           try {
-            // Get event detail -> albums
             const evRes = await fetch(noCache(`${BASE_URL}/events/${ev.id}`), {
               headers: authHeader,
               credentials: "omit",
@@ -142,7 +140,6 @@ export default function Dashboard() {
             const albums: { id: number; name: string }[] = evData?.event?.albums || [];
             if (!albums.length) return { id: ev.id, name: ev.name, coverPath: null };
 
-            // Get first album's photos
             const firstAlbumId = albums[0].id;
             const phRes = await fetch(noCache(`${BASE_URL}/albums/${firstAlbumId}/photos`), {
               headers: authHeader,
@@ -204,7 +201,7 @@ export default function Dashboard() {
         </p>
       </section>
 
-      {/* Recent Events (with cover) */}
+      {/* Recent Events (with bigger, consistent covers) */}
       <section className="mb-6 p-4 bg-white rounded shadow">
         <h2 className="text-xl font-semibold mb-3 text-[var(--primary)]">Recent Events</h2>
         {loadingEvents ? (
@@ -226,11 +223,11 @@ export default function Dashboard() {
                     <img
                       src={coverUrl}
                       alt={ev.name}
-                      className="w-full h-32 object-cover"
+                      className="w-full h-40 md:h-48 object-cover"
                       loading="lazy"
                     />
                   ) : (
-                    <div className="w-full h-32 bg-gray-200 flex items-center justify-center text-gray-500 text-sm">
+                    <div className="w-full h-40 md:h-48 bg-gray-200 flex items-center justify-center text-gray-500 text-sm">
                       No cover image
                     </div>
                   )}

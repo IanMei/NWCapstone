@@ -29,7 +29,7 @@ export default function AlbumView() {
   const getToken = () => {
     const t = localStorage.getItem("token");
     return t && t !== "undefined" ? t : null;
-    };
+  };
   const ownerImgQS = (() => {
     const jwt = getToken();
     return jwt ? `?a=${encodeURIComponent(jwt)}` : "";
@@ -98,8 +98,8 @@ export default function AlbumView() {
     const base = name.split("/").pop() || name; // in case of weird paths
     const lower = base.toLowerCase();
     return (
-      base.startsWith(".") ||          // dotfiles (includes ._*)
-      base.includes("_._") ||          // AppleDouble after a prefixed folder, e.g. Banquet_._DSC.jpg
+      base.startsWith(".") || // dotfiles (includes ._*)
+      base.includes("_._") || // AppleDouble after a prefixed folder, e.g. Banquet_._DSC.jpg
       lower === ".ds_store" ||
       lower === "thumbs.db" ||
       lower === "desktop.ini"
@@ -138,7 +138,6 @@ export default function AlbumView() {
       console.error("Upload failed:", err);
     } finally {
       setUploading(false);
-      // reset inputs so same files can be selected again later
       if (fileInputRef.current) fileInputRef.current.value = "";
       if (folderInputRef.current) folderInputRef.current.value = "";
     }
@@ -261,7 +260,7 @@ export default function AlbumView() {
 
   return (
     <main className="p-6">
-      {/* Line 1: Back button only */}
+      {/* Back */}
       <div className="mb-2">
         <button
           onClick={() => navigate("/albums")}
@@ -272,13 +271,13 @@ export default function AlbumView() {
         </button>
       </div>
 
-      {/* Line 2: Title + count */}
+      {/* Title + count */}
       <h1 className="text-3xl font-bold text-[var(--primary)] mb-2">
         {albumName ? `Album: ${albumName} ` : `Album #${albumId} `}
         <span className="text-base text-gray-600 align-middle">{countLabel}</span>
       </h1>
 
-      {/* Line 3: Share section under title */}
+      {/* Share */}
       <div className="mb-6 flex flex-col sm:flex-row sm:items-center gap-2">
         <button
           onClick={generateAlbumShare}
@@ -350,7 +349,7 @@ export default function AlbumView() {
         />
       </div>
 
-      {/* Photo Grid */}
+      {/* Photo Grid — fit portrait & landscape (no cropping) */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
         {photos.map((photo) => (
           <div
@@ -358,11 +357,15 @@ export default function AlbumView() {
             className="relative group border rounded overflow-hidden shadow bg-white"
           >
             <Link to={`/albums/${albumId}/photo/${photo.id}`}>
-              <img
-                src={`${PHOTO_BASE_URL}/uploads/${photo.filepath}${ownerImgQS}`}
-                alt={photo.filename}
-                className="w-full h-48 object-cover"
-              />
+              {/* Frame that centers the image; object-contain to avoid crop */}
+              <div className="w-full h-52 md:h-64 bg-gray-50 flex items-center justify-center">
+                <img
+                  src={`${PHOTO_BASE_URL}/uploads/${photo.filepath}${ownerImgQS}`}
+                  alt={photo.filename}
+                  className="max-h-full max-w-full object-contain"
+                  loading="lazy"
+                />
+              </div>
             </Link>
             <button
               onClick={() => deletePhoto(photo.id)}

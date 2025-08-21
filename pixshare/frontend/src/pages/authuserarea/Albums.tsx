@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { BASE_URL } from "../../utils/api";
+import { BASE_URL, PHOTO_BASE_URL } from "../../utils/api";
 
 type Album = {
   id: number;
@@ -12,6 +12,7 @@ const noCache = (url: string) => `${url}${url.includes("?") ? "&" : "?"}_=${Date
 
 export default function Albums() {
   const [albums, setAlbums] = useState<Album[]>([]);
+  const [covers, setCovers] = useState<Record<number, string | null>>({});
   const [newAlbumName, setNewAlbumName] = useState("");
   const navigate = useNavigate();
 
@@ -19,6 +20,11 @@ export default function Albums() {
     const token = localStorage.getItem("token");
     return token && token !== "undefined" ? token : null;
   };
+
+  const ownerImgQS = (() => {
+    const t = getToken();
+    return t ? `?a=${encodeURIComponent(t)}` : "";
+  })();
 
   const handleAuthError = (status: number) => {
     if (status === 401 || status === 422) {
@@ -45,6 +51,35 @@ export default function Albums() {
       setAlbums(data.albums || []);
     } catch (err) {
       console.error("Failed to fetch albums:", err);
+    }
+  };
+
+  // Load a cover (first photo) for each album
+  const fetchCovers = async () => {
+    const token = getToken();
+    if (!token) return;
+    try {
+      const entries = await Promise.all(
+        albums.map(async (a) => {
+          try {
+            const res = await fetch(noCache(`${BASE_URL}/albums/${a.id}/photos`), {
+              headers: { Authorization: `Bearer ${token}` },
+              credentials: "omit",
+              cache: "no-store",
+            });
+            if (!res.ok) return [a.id, null] as const;
+            const data = await res.json();
+            const first = (data.photos || [])[0];
+            return [a.id, first ? (first.filepath as string) : null] as const;
+          } catch {
+            return [a.id, null] as const;
+          }
+        })
+      );
+      setCovers(Object.fromEntries(entries));
+    } catch (e) {
+      console.warn("Cover load failed:", e);
+      setCovers({});
     }
   };
 
@@ -106,6 +141,11 @@ export default function Albums() {
     }
   }, [navigate]);
 
+  useEffect(() => {
+    if (albums.length > 0) fetchCovers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [albums.map((a) => a.id).join(",")]);
+
   return (
     <main className="p-6">
       <h1 className="text-3xl font-bold mb-4 text-[var(--primary)]">My Albums</h1>
@@ -125,32 +165,55 @@ export default function Albums() {
         </button>
       </div>
 
-      <ul className="space-y-4">
-        {albums.map((album) => (
-          <li
-            key={album.id}
-            className="flex justify-between items-center p-4 bg-white rounded shadow"
-          >
-            <Link
-              to={`/albums/${album.id}`}
-              className="text-lg text-[var(--secondary)] hover:underline"
-            >
-              <div className="flex items-center gap-2">
-                <span>{album.name}</span>
+      {/* Album cards with cover images */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+        {albums.map((album) => {
+          const coverPath = covers[album.id] || null;
+          const coverUrl = coverPath
+            ? `${PHOTO_BASE_URL}/uploads/${coverPath}${ownerImgQS}`
+            : null;
+
+          return (
+            <div key={album.id} className="rounded overflow-hidden shadow bg-white">
+              <Link to={`/albums/${album.id}`} title={album.name} className="block">
+                {coverUrl ? (
+                  <img
+                    src={coverUrl}
+                    alt={album.name}
+                    className="w-full h-40 md:h-48 object-cover"
+                    loading="lazy"
+                  />
+                ) : (
+                  <div className="w-full h-40 md:h-48 bg-gray-100 text-gray-500 flex items-center justify-center text-sm">
+                    No cover image
+                  </div>
+                )}
+              </Link>
+
+              <div className="p-3 flex items-center justify-between">
+                <Link
+                  to={`/albums/${album.id}`}
+                  className="text-lg text-[var(--secondary)] hover:underline truncate"
+                >
+                  {album.name}
+                </Link>
                 <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-700">
                   {(album.photo_count ?? 0)} photos
                 </span>
               </div>
-            </Link>
-            <button
-              onClick={() => deleteAlbum(album.id)}
-              className="text-sm text-red-600 hover:underline"
-            >
-              Delete
-            </button>
-          </li>
-        ))}
-      </ul>
+
+              <div className="px-3 pb-3">
+                <button
+                  onClick={() => deleteAlbum(album.id)}
+                  className="text-sm text-red-600 hover:underline"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </main>
   );
 }
