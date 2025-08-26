@@ -1,3 +1,4 @@
+// src/components/Navbar.tsx
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import ThemeSwitcher from "./ThemeSwitcher";
 import { useAuth } from "../context/AuthContext";
@@ -9,58 +10,87 @@ export default function Navbar() {
 
   const handleLogout = async () => {
     try {
-      // Header-only auth: no need to send cookies.
-      // AuthContext.logout() already POSTs /api/auth/logout and clears local token.
       await logout();
       navigate("/");
     } catch {
-      // Even if the request fails, local state is cleared by logout()
       navigate("/");
     }
   };
 
-  const linkClass = (path: string) =>
-    `hover:underline ${location.pathname === path ? "font-semibold underline" : ""}`;
+  // active if exact or inside section (e.g., /albums/42)
+  const isActive = (path: string) =>
+    location.pathname === path || location.pathname.startsWith(path + "/");
+
+  const navItemClass = (active: boolean) =>
+    [
+      "relative px-3 py-1 rounded-lg transition-colors duration-150",
+      "focus:outline-none focus:ring-2 focus:ring-white/40",
+      active
+        ? // Active: brighter pill + subtle ring + tiny underline bar
+          "text-white bg-white/15 ring-1 ring-white/15 shadow-sm " +
+          "after:absolute after:left-2 after:right-2 after:-bottom-1 after:h-0.5 after:bg-white/70 after:rounded-full"
+        : // Inactive: dim text, hover brighten
+          "text-white/80 hover:text-white hover:bg-white/10",
+    ].join(" ");
 
   return (
-    <nav className="flex justify-between items-center px-6 py-4 bg-[var(--primary)] text-white">
-      <Link
-        to={isAuthenticated ? "/dashboard" : "/"}
-        className="text-2xl font-bold"
-      >
-        PixShare
-      </Link>
+    <nav
+      className={[
+        "sticky top-0 z-40",
+        // solid base color + slight transparency + blur for a modern look
+        "bg-[var(--primary)]/95 backdrop-blur shadow-md border-b border-white/10",
+        "px-6 py-3",
+      ].join(" ")}
+    >
+      <div className="max-w-7xl mx-auto flex items-center justify-between">
+        <Link
+          to={isAuthenticated ? "/dashboard" : "/"}
+          className="text-2xl font-bold tracking-tight select-none"
+          title="PixShare"
+        >
+          {/* Subtle text treatment for a 'tech' feel */}
+          <span className="bg-gradient-to-r from-white to-white/80 bg-clip-text text-transparent">
+            PixShare
+          </span>
+        </Link>
 
-      <div className="flex items-center gap-6">
-        {isAuthenticated ? (
-          <>
-            <Link to="/dashboard" className={linkClass("/dashboard")}>
-              Dashboard
-            </Link>
-            <Link to="/albums" className={linkClass("/albums")}>
-              Albums
-            </Link>
-            <Link to="/events" className={linkClass("/events")}>
-              Events
-            </Link>
-            <Link to="/account/settings" className={linkClass("/account/settings")}>
-              Settings
-            </Link>
-            <button onClick={handleLogout} className="hover:underline">
-              Logout
-            </button>
-          </>
-        ) : (
-          <>
-            <Link to="/login" className={linkClass("/login")}>
-              Login
-            </Link>
-            <Link to="/register" className={linkClass("/register")}>
-              Register
-            </Link>
-          </>
-        )}
-        <ThemeSwitcher />
+        <div className="flex items-center gap-2 sm:gap-3">
+          {isAuthenticated ? (
+            <>
+              <Link to="/dashboard" className={navItemClass(isActive("/dashboard"))}>
+                Dashboard
+              </Link>
+              <Link to="/albums" className={navItemClass(isActive("/albums"))}>
+                Albums
+              </Link>
+              <Link to="/events" className={navItemClass(isActive("/events"))}>
+                Events
+              </Link>
+              <Link
+                to="/account/settings"
+                className={navItemClass(isActive("/account/settings"))}
+              >
+                Settings
+              </Link>
+              <button
+                onClick={handleLogout}
+                className="px-3 py-1 rounded-lg text-white/80 hover:text-white hover:bg-white/10 transition-colors"
+              >
+                Logout
+              </button>
+            </>
+          ) : (
+            <>
+              <Link to="/login" className={navItemClass(isActive("/login"))}>
+                Login
+              </Link>
+              <Link to="/register" className={navItemClass(isActive("/register"))}>
+                Register
+              </Link>
+            </>
+          )}
+          <ThemeSwitcher />
+        </div>
       </div>
     </nav>
   );

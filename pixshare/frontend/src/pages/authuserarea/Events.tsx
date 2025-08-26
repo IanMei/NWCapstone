@@ -235,7 +235,7 @@ export default function Events() {
 
   return (
     <main className="p-6">
-      <h1 className="text-3xl font-bold text-[var(--primary)] mb-4">Event Albums</h1>
+      <h1 className="text-3xl font-bold text-[var(--primary)] mb-4">Events</h1>
 
       {/* Create Event */}
       <div className="mb-6 flex gap-2">
