@@ -1,4 +1,4 @@
-# NWCapstone
+# NWCapstone: Pixshare
 
 This is the Northwestern MSIS capstone project supervised by Prof.Amul Chapla & TA Cesar Martinez .
 
